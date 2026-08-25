@@ -1,15 +1,26 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from . import __version__
 from .models import CallRecord, GuestEvent, InterfaceConfig
+from .operator_console import html as operator_html
 from .protocols.registry import REGISTRY, protocol_catalog
 from .sessions import manager
+from .storage import store
 
-app = FastAPI(title="InnAware PMS Emulator", version=__version__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await manager.restore(store.load())
+    yield
+
+
+app = FastAPI(title="InnAware PMS Emulator", version=__version__, lifespan=lifespan)
 
 
 class RawSendRequest(BaseModel):
@@ -27,6 +38,13 @@ def _interface_or_404(name: str):
         return manager.get(name)
     except KeyError:
         raise HTTPException(404, f"Interface '{name}' not found")
+
+
+def _persist() -> None:
+    try:
+        store.save(manager.configs())
+    except OSError as exc:
+        raise HTTPException(500, f"Unable to persist interface configuration: {exc}")
 
 
 def _bytes_from_request(request: RawSendRequest) -> bytes:
@@ -88,6 +106,7 @@ async def create_interface(config: InterfaceConfig):
         runtime = await manager.create(config)
     except (ValueError, OSError) as exc:
         raise HTTPException(400, str(exc))
+    _persist()
     return runtime.status()
 
 
@@ -103,26 +122,38 @@ async def start_interface(name: str):
         await manager.start(name)
     except (ValueError, OSError) as exc:
         raise HTTPException(400, str(exc))
-    return manager.get(name).status()
+    runtime = manager.get(name)
+    runtime.config.enabled = True
+    _persist()
+    return runtime.status()
 
 
 @app.post("/api/v1/interfaces/{name}/stop")
 async def stop_interface(name: str):
-    _interface_or_404(name)
+    runtime = _interface_or_404(name)
     await manager.stop(name)
-    return manager.get(name).status()
+    runtime.config.enabled = False
+    _persist()
+    return runtime.status()
 
 
 @app.delete("/api/v1/interfaces/{name}", status_code=204)
 async def delete_interface(name: str):
     _interface_or_404(name)
     await manager.remove(name)
+    _persist()
 
 
 @app.get("/api/v1/interfaces/{name}/captures")
 def interface_captures(name: str, limit: int = 200):
     _interface_or_404(name)
     return {"captures": manager.captures(name, limit)}
+
+
+@app.get("/api/v1/interfaces/{name}/transactions")
+def interface_transactions(name: str, limit: int = 100):
+    _interface_or_404(name)
+    return {"transactions": manager.transactions(name, limit)}
 
 
 @app.post("/api/v1/interfaces/{name}/send/raw")
@@ -178,18 +209,27 @@ async def send_call_record(name: str, call: CallRecord):
     return {"sent_to": recipients, "protocol": runtime.config.protocol, "hex": payload.hex(" ")}
 
 
+@app.post("/api/v1/interfaces/{name}/send/call-record-transaction")
+async def send_call_record_transaction(name: str, call: CallRecord):
+    runtime = _interface_or_404(name)
+    if runtime.config.purpose.value != "call_accounting":
+        raise HTTPException(400, "Interface is not a call-accounting interface")
+    adapter = REGISTRY[runtime.config.protocol]
+    payload = adapter.encode_call(call.model_dump())
+    try:
+        result = await manager.send_call_transaction(name, payload)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc))
+    return {"protocol": runtime.config.protocol, "hex": payload.hex(" "), "transaction": result}
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>InnAware PMS Emulator</title>
-<style>body{font-family:system-ui;max-width:1100px;margin:3rem auto;padding:0 1rem;background:#f6f7f9;color:#17202a}code{background:#e9edf2;padding:.2rem .4rem;border-radius:4px}.card{background:#fff;border:1px solid #dfe3e8;border-radius:12px;padding:1rem 1.2rem;margin:1rem 0;box-shadow:0 2px 6px #0000000d}.ok{color:#16803a}</style></head><body>
-<h1>InnAware PMS Emulator</h1><p class="ok"><b>Wire-session foundation enabled.</b></p>
-<div class="card"><b>Health</b><p><code>/api/v1/health</code></p></div>
-<div class="card"><b>Protocols</b><p><code>/api/v1/protocols</code></p></div>
-<div class="card"><b>Live interfaces</b><p><code>/api/v1/interfaces</code></p><p>TCP server, TCP client and serial sessions can now be created and controlled through the API.</p></div>
-<div class="card"><b>Capture console</b><p>Each interface records RX/TX text, hexadecimal bytes, peer, timestamps and control-byte annotations. The interactive operator GUI is the next layer.</p></div>
-</body></html>"""
+    return operator_html()
 
 
 def run():
     import uvicorn
-    uvicorn.run("innaware_pms_emulator.main:app", host="0.0.0.0", port=8080)
+    uvicorn.run("innaware_pms_emulator.main:app", host="127.0.0.1", port=8080)
