@@ -10,6 +10,7 @@ import serial_asyncio
 
 from .framing import ACK, ENQ, NAK, FramingMode, control_name, encode_frame
 from .models import InterfaceConfig, TransportMode
+from .state import CallAccountingStateMachine, EngineAction, FiasStateMachine
 
 
 @dataclass(slots=True)
@@ -43,6 +44,7 @@ class InterfaceRuntime:
     peer: str | None = None
     captures: deque[CaptureRecord] = field(default_factory=lambda: deque(maxlen=2000))
     clients: set[asyncio.StreamWriter] = field(default_factory=set)
+    engine: FiasStateMachine | CallAccountingStateMachine | None = None
 
     def capture(self, direction: str, data: bytes, *, peer: str | None = None, note: str | None = None) -> None:
         self.captures.append(CaptureRecord(
@@ -54,7 +56,7 @@ class InterfaceRuntime:
         ))
 
     def status(self) -> dict[str, Any]:
-        return {
+        result = {
             "name": self.config.name,
             "purpose": self.config.purpose.value,
             "protocol": self.config.protocol,
@@ -64,6 +66,9 @@ class InterfaceRuntime:
             "connected_clients": len(self.clients),
             "last_error": self.last_error,
         }
+        if self.engine:
+            result["protocol_state"] = self.engine.status()
+        return result
 
 
 class InterfaceManager:
@@ -71,12 +76,25 @@ class InterfaceManager:
         self._interfaces: dict[str, InterfaceRuntime] = {}
         self._lock = asyncio.Lock()
 
+    @staticmethod
+    def _build_engine(config: InterfaceConfig):
+        protocol = config.protocol.upper()
+        if protocol in {"FIAS", "HILTON_PEP_FIAS"}:
+            return FiasStateMachine(role=str(config.options.get("role", "pms")))
+        if protocol in {"INNFORM_XL", "HOBIS"}:
+            return CallAccountingStateMachine(
+                ack_type=str(config.options.get("ack_type", "ack")),
+                auto_ack=bool(config.options.get("auto_ack", True)),
+                ack_enq=bool(config.options.get("ack_enq", True)),
+            )
+        return None
+
     async def create(self, config: InterfaceConfig) -> InterfaceRuntime:
         key = config.name.strip().lower()
         async with self._lock:
             if key in self._interfaces:
                 raise ValueError(f"Interface '{config.name}' already exists")
-            runtime = InterfaceRuntime(config=config)
+            runtime = InterfaceRuntime(config=config, engine=self._build_engine(config))
             self._interfaces[key] = runtime
         if config.enabled:
             await self.start(config.name)
@@ -278,12 +296,26 @@ class InterfaceManager:
             if len(data) == 1:
                 note = control_name(data[0])
             runtime.capture("rx", data, peer=peer, note=note)
-            if runtime.config.options.get("auto_ack") and data != bytes((ACK,)):
-                writer = self._writer_for_peer(runtime, peer)
-                if writer:
-                    writer.write(bytes((ACK,)))
-                    await writer.drain()
-                    runtime.capture("tx", bytes((ACK,)), peer=peer, note="auto ACK")
+
+            if runtime.engine:
+                for action in runtime.engine.feed(data):
+                    await self._send_action(runtime, peer, action)
+            elif runtime.config.options.get("auto_ack") and data != bytes((ACK,)):
+                await self._send_action(
+                    runtime,
+                    peer,
+                    EngineAction(bytes((ACK,)), "generic auto ACK", apply_framing=False),
+                )
+
+    async def _send_action(self, runtime: InterfaceRuntime, peer: str | None, action: EngineAction) -> None:
+        writer = self._writer_for_peer(runtime, peer)
+        if not writer:
+            return
+        framing = runtime.config.options.get("framing", "raw")
+        wire = encode_frame(action.payload, FramingMode(framing)) if action.apply_framing else action.payload
+        writer.write(wire)
+        await writer.drain()
+        runtime.capture("tx", wire, peer=peer, note=action.note)
 
     @staticmethod
     def _peer_name(writer: asyncio.StreamWriter) -> str | None:
