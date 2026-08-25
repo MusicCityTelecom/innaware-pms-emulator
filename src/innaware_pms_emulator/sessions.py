@@ -11,6 +11,7 @@ import serial_asyncio
 from .framing import ACK, ENQ, NAK, FramingMode, control_name, encode_frame
 from .models import InterfaceConfig, TransportMode
 from .state import CallAccountingStateMachine, EngineAction, FiasStateMachine
+from .transactions import CallAccountingTransactionSender
 
 
 @dataclass(slots=True)
@@ -45,6 +46,9 @@ class InterfaceRuntime:
     captures: deque[CaptureRecord] = field(default_factory=lambda: deque(maxlen=2000))
     clients: set[asyncio.StreamWriter] = field(default_factory=set)
     engine: FiasStateMachine | CallAccountingStateMachine | None = None
+    responses: asyncio.Queue[int] = field(default_factory=asyncio.Queue)
+    transaction_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    transaction_history: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=200))
 
     def capture(self, direction: str, data: bytes, *, peer: str | None = None, note: str | None = None) -> None:
         self.captures.append(CaptureRecord(
@@ -65,6 +69,7 @@ class InterfaceRuntime:
             "peer": self.peer,
             "connected_clients": len(self.clients),
             "last_error": self.last_error,
+            "transaction_count": len(self.transaction_history),
         }
         if self.engine:
             result["protocol_state"] = self.engine.status()
@@ -99,6 +104,22 @@ class InterfaceManager:
         if config.enabled:
             await self.start(config.name)
         return runtime
+
+    async def restore(self, configs: list[InterfaceConfig]) -> None:
+        for config in configs:
+            try:
+                await self.create(config)
+            except Exception:
+                # A bad persisted endpoint must not prevent the emulator from starting.
+                key = config.name.strip().lower()
+                if key not in self._interfaces:
+                    self._interfaces[key] = InterfaceRuntime(config=config, engine=self._build_engine(config))
+                runtime = self._interfaces[key]
+                runtime.state = "error"
+                runtime.last_error = "Unable to restore persisted interface"
+
+    def configs(self) -> list[InterfaceConfig]:
+        return [runtime.config for runtime in self._interfaces.values()]
 
     def get(self, name: str) -> InterfaceRuntime:
         runtime = self._interfaces.get(name.strip().lower())
@@ -162,10 +183,72 @@ class InterfaceManager:
         runtime.peer = None
         runtime.state = "stopped"
 
-    async def send(self, name: str, payload: bytes, *, frame: bool = True) -> int:
+    async def send(self, name: str, payload: bytes, *, frame: bool = True, note: str | None = None) -> int:
         runtime = self.get(name)
         framing = runtime.config.options.get("framing", "raw")
         wire = encode_frame(payload, FramingMode(framing)) if frame else payload
+        return await self._write(runtime, wire, note=note)
+
+    async def send_control(self, name: str, control: str) -> int:
+        mapping = {"ENQ": ENQ, "ACK": ACK, "NAK": NAK}
+        value = mapping.get(control.upper())
+        if value is None:
+            raise ValueError("Control must be ENQ, ACK, or NAK")
+        return await self.send(name, bytes((value,)), frame=False, note=f"manual {control.upper()}")
+
+    async def send_call_transaction(self, name: str, record: bytes) -> dict[str, Any]:
+        runtime = self.get(name)
+        if runtime.config.purpose.value != "call_accounting":
+            raise ValueError("Interface is not a call-accounting interface")
+        if runtime.config.protocol not in {"INNFORM_XL", "HOBIS"}:
+            raise ValueError("Transactional sender is currently supported for INNFORM_XL and HOBIS")
+
+        timeout = float(runtime.config.options.get("ack_timeout", 5.0))
+        max_attempts = int(runtime.config.options.get("max_attempts", 3))
+        sender = CallAccountingTransactionSender(timeout=timeout, max_attempts=max_attempts)
+
+        async with runtime.transaction_lock:
+            while not runtime.responses.empty():
+                try:
+                    runtime.responses.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+
+            async def send_control(payload: bytes, note: str) -> None:
+                await self._write(runtime, payload, note=note)
+
+            async def send_record(payload: bytes, note: str) -> None:
+                framing = runtime.config.options.get("transaction_framing", runtime.config.options.get("framing", "raw"))
+                wire = encode_frame(payload, FramingMode(framing))
+                await self._write(runtime, wire, note=note)
+
+            async def wait_response(timeout_value: float) -> int:
+                return await asyncio.wait_for(runtime.responses.get(), timeout=timeout_value)
+
+            result = await sender.run(
+                record,
+                send_control=send_control,
+                send_record=send_record,
+                wait_response=wait_response,
+            )
+            item = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "protocol": runtime.config.protocol,
+                **result.as_dict(),
+            }
+            runtime.transaction_history.append(item)
+            return item
+
+    def captures(self, name: str, limit: int = 200) -> list[dict[str, Any]]:
+        runtime = self.get(name)
+        records = list(runtime.captures)[-max(1, min(limit, 2000)):]
+        return [record.as_dict() for record in records]
+
+    def transactions(self, name: str, limit: int = 100) -> list[dict[str, Any]]:
+        runtime = self.get(name)
+        return list(runtime.transaction_history)[-max(1, min(limit, 200)):]
+
+    async def _write(self, runtime: InterfaceRuntime, wire: bytes, *, note: str | None = None) -> int:
         sent = 0
         if runtime.config.transport is TransportMode.TCP_SERVER:
             dead: list[asyncio.StreamWriter] = []
@@ -174,7 +257,7 @@ class InterfaceManager:
                     writer.write(wire)
                     await writer.drain()
                     sent += 1
-                    runtime.capture("tx", wire, peer=self._peer_name(writer))
+                    runtime.capture("tx", wire, peer=self._peer_name(writer), note=note)
                 except Exception:
                     dead.append(writer)
             for writer in dead:
@@ -183,22 +266,12 @@ class InterfaceManager:
             runtime.writer.write(wire)
             await runtime.writer.drain()
             sent = 1
-            runtime.capture("tx", wire, peer=runtime.peer)
+            runtime.capture("tx", wire, peer=runtime.peer, note=note)
         else:
-            raise RuntimeError(f"Interface '{name}' has no connected endpoint")
+            raise RuntimeError(f"Interface '{runtime.config.name}' has no connected endpoint")
+        if sent == 0:
+            raise RuntimeError(f"Interface '{runtime.config.name}' has no connected endpoint")
         return sent
-
-    async def send_control(self, name: str, control: str) -> int:
-        mapping = {"ENQ": ENQ, "ACK": ACK, "NAK": NAK}
-        value = mapping.get(control.upper())
-        if value is None:
-            raise ValueError("Control must be ENQ, ACK, or NAK")
-        return await self.send(name, bytes((value,)), frame=False)
-
-    def captures(self, name: str, limit: int = 200) -> list[dict[str, Any]]:
-        runtime = self.get(name)
-        records = list(runtime.captures)[-max(1, min(limit, 2000)):]
-        return [record.as_dict() for record in records]
 
     async def _start_tcp_server(self, runtime: InterfaceRuntime) -> None:
         if not runtime.config.port:
@@ -296,6 +369,10 @@ class InterfaceManager:
             if len(data) == 1:
                 note = control_name(data[0])
             runtime.capture("rx", data, peer=peer, note=note)
+
+            for byte in data:
+                if byte in {ACK, NAK}:
+                    runtime.responses.put_nowait(byte)
 
             if runtime.engine:
                 for action in runtime.engine.feed(data):
