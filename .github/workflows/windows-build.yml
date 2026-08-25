@@ -1,0 +1,42 @@
+name: Windows Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - 'scripts/build-windows.ps1'
+      - '.github/workflows/windows-build.yml'
+  pull_request:
+    branches: [main]
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Build Windows field package
+        shell: pwsh
+        run: ./scripts/build-windows.ps1 -Python python
+
+      - name: Upload Windows executable and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: innaware-pms-emulator-windows
+          path: |
+            dist-windows/InnAware-PMS-Emulator.exe
+            dist-windows/README-WINDOWS.txt
+            dist-windows/SHA256SUMS.txt
+            InnAware-PMS-Emulator-Windows.zip
+          if-no-files-found: error
