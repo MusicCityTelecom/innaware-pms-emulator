@@ -10,6 +10,9 @@ $ProgressPreference = "SilentlyContinue"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
 
+$Author = "Tommy Heggie"
+$ProductName = "InnAware PMS Emulator"
+
 $OutputPath = if ([System.IO.Path]::IsPathRooted($OutputDir)) {
     [System.IO.Path]::GetFullPath($OutputDir)
 }
@@ -91,6 +94,44 @@ function Remove-BuildOutputDirectory {
     throw "Unable to clean '$Path' after 10 seconds. Windows still has a file handle open (often antivirus/indexing immediately after a new EXE is run). Retry once the handle is released. Last error: $($LastError.Exception.Message)"
 }
 
+function Find-InnoSetupCompiler {
+    $Candidates = @()
+
+    try {
+        $Command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+        if ($Command -and $Command.Source) {
+            $Candidates += $Command.Source
+        }
+    }
+    catch {}
+
+    $ProgramFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+    $ProgramFiles64 = [Environment]::GetEnvironmentVariable("ProgramFiles")
+    $LocalAppData = [Environment]::GetEnvironmentVariable("LOCALAPPDATA")
+
+    if ($ProgramFilesX86) {
+        $Candidates += (Join-Path $ProgramFilesX86 "Inno Setup 6\ISCC.exe")
+    }
+    if ($ProgramFiles64) {
+        $Candidates += (Join-Path $ProgramFiles64 "Inno Setup 6\ISCC.exe")
+    }
+    if ($LocalAppData) {
+        $Candidates += (Join-Path $LocalAppData "Programs\Inno Setup 6\ISCC.exe")
+    }
+
+    $Existing = @(
+        $Candidates |
+            Where-Object { $_ -and (Test-Path -LiteralPath $_) } |
+            ForEach-Object { [System.IO.Path]::GetFullPath($_) } |
+            Select-Object -Unique
+    )
+
+    if ($Existing.Count -gt 0) {
+        return $Existing[0]
+    }
+    return $null
+}
+
 $Venv = Join-Path $RepoRoot ".venv-winbuild"
 if (-not (Test-Path $Venv)) {
     if ($Python -eq "py") {
@@ -112,7 +153,8 @@ if ($LASTEXITCODE -ne 0) { throw "Build dependencies failed to install" }
 
 $Version = (& $Py -c "import innaware_pms_emulator; print(innaware_pms_emulator.__version__)").Trim()
 if (-not $Version) { throw "Unable to determine application version" }
-Write-Host "Building InnAware PMS Emulator $Version" -ForegroundColor Cyan
+Write-Host "Building $ProductName $Version" -ForegroundColor Cyan
+Write-Host "Author: $Author" -ForegroundColor DarkGray
 
 & $Py -m pytest -q
 if ($LASTEXITCODE -ne 0) { throw "Regression tests failed; refusing to package Windows executable." }
@@ -144,7 +186,8 @@ VSVersionInfo(
          StringStruct(u'FileDescription', u'InnAware PMS Emulator'),
          StringStruct(u'FileVersion', u'$Version'),
          StringStruct(u'InternalName', u'InnAware-PMS-Emulator'),
-         StringStruct(u'LegalCopyright', u'Copyright InnAware contributors'),
+         StringStruct(u'LegalCopyright', u'Copyright (c) 2026 Tommy Heggie'),
+         StringStruct(u'Comments', u'Created and maintained by Tommy Heggie'),
          StringStruct(u'OriginalFilename', u'InnAware-PMS-Emulator.exe'),
          StringStruct(u'ProductName', u'InnAware PMS Emulator'),
          StringStruct(u'ProductVersion', u'$Version')])
@@ -177,9 +220,6 @@ if (-not (Test-Path $Exe)) { throw "Windows executable was not produced: $Exe" }
 $SmokeScript = Join-Path $PSScriptRoot "smoke-windows.ps1"
 & $SmokeScript -Exe $Exe
 
-# The one-file PyInstaller bootloader uses a parent/child process model. The
-# smoke script terminates its tree; this additional wait protects subsequent
-# packaging from short-lived image/AV/indexer handles on the just-run EXE.
 for ($i = 0; $i -lt 20; $i++) {
     if (@(Get-OutputExeProcesses -ExePath $Exe).Count -eq 0) { break }
     Start-Sleep -Milliseconds 100
@@ -187,6 +227,7 @@ for ($i = 0; $i -lt 20; $i++) {
 
 $Readme = @"
 InnAware PMS Emulator $Version - Windows Field Build
+Author: Tommy Heggie
 
 QUICK START
 ===========
@@ -224,6 +265,8 @@ COMMAND-LINE OPTIONS
 Normal field use should keep the management interface on 127.0.0.1.
 
 This software is a test/emulation instrument. Do not connect it to a production PMS or billing endpoint unless test traffic is explicitly intended and authorized.
+
+Copyright (c) 2026 Tommy Heggie.
 "@
 Set-Content -Path (Join-Path $OutputPath "README-WINDOWS.txt") -Value $Readme -Encoding utf8
 
@@ -234,15 +277,9 @@ Set-Content -Path (Join-Path $OutputPath "SHA256SUMS.txt") -Value $HashLines -En
 $Installer = $null
 $InstallerHash = $null
 if (-not $SkipInstaller) {
-    $ProgramFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
-    $ProgramFiles64 = [Environment]::GetEnvironmentVariable("ProgramFiles")
-    $IsccCandidates = @()
-    if ($ProgramFilesX86) { $IsccCandidates += (Join-Path $ProgramFilesX86 "Inno Setup 6\ISCC.exe") }
-    if ($ProgramFiles64) { $IsccCandidates += (Join-Path $ProgramFiles64 "Inno Setup 6\ISCC.exe") }
-    $IsccCandidates = @($IsccCandidates | Where-Object { Test-Path $_ })
-
-    if ($IsccCandidates.Count -gt 0) {
-        $Iscc = $IsccCandidates[0]
+    $Iscc = Find-InnoSetupCompiler
+    if ($Iscc) {
+        Write-Host "Using Inno Setup compiler: $Iscc" -ForegroundColor DarkGray
         $Iss = Join-Path $RepoRoot "packaging\windows\InnAware-PMS-Emulator.iss"
         & $Iscc "/DAppVersion=$Version" "/DSourceDir=$OutputPath" $Iss
         if ($LASTEXITCODE -ne 0) { throw "Inno Setup build failed" }
@@ -253,7 +290,7 @@ if (-not $SkipInstaller) {
         Set-Content -Path (Join-Path $OutputPath "SHA256SUMS.txt") -Value $HashLines -Encoding ascii
     }
     else {
-        Write-Warning "Inno Setup 6 was not found. Portable EXE/ZIP will be built; install Inno Setup 6 to also produce Setup.exe."
+        Write-Warning "Inno Setup 6 was not found. Portable EXE/ZIP will be built; install Inno Setup 6 to also produce Setup.exe. Checked PATH, Program Files, Program Files (x86), and LOCALAPPDATA\Programs."
     }
 }
 
@@ -284,6 +321,8 @@ Set-Content -Path $ReleaseChecksumFile -Value $ReleaseSums -Encoding ascii
 
 Write-Host ""
 Write-Host "Build complete:" -ForegroundColor Green
+Write-Host "  Product:      $ProductName"
+Write-Host "  Author:       $Author"
 Write-Host "  Version:      $Version"
 Write-Host "  Portable EXE: $Exe"
 if ($Installer) { Write-Host "  Installer:    $Installer" }
