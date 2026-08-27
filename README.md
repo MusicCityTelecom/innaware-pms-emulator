@@ -1,7 +1,8 @@
 # InnAware PMS Emulator
 
 **Author:** Tommy Heggie  
-**Current version:** 0.3.0 field beta  
+**Current development version:** 0.3.1  
+**Latest published field beta:** v0.3.0-beta  
 **Primary user platform:** Windows 10/11 x64  
 **Engineering/lab platform:** Linux / Debian
 
@@ -9,13 +10,13 @@ InnAware PMS Emulator is a Windows-first, cross-platform hotel PMS, PBX, and cal
 
 The Windows application is the primary field product. Linux uses the same protocol/property engine for development, regression testing, long-running TCP/serial laboratory work, and headless service operation.
 
-> **Status:** 0.3.0 is a field-beta milestone. Supported profiles are usable for testing, but protocol maturity is reported explicitly and not every vendor-specific variant is complete or certified.
+> **Status:** the project is still field beta. Supported profiles are usable for testing, but protocol maturity is reported explicitly and not every vendor-specific variant is complete or certified.
 
 ## Download and run on Windows
 
 ### Preferred: installer
 
-When a release includes the installer, download:
+Download the current release asset:
 
 ```text
 InnAware-PMS-Emulator-Setup.exe
@@ -45,8 +46,6 @@ InnAware-PMS-Emulator.exe
 
 **Python is not required to run either packaged Windows distribution.**
 
-The application starts its local engine automatically and opens the operator console in a native Windows application window.
-
 Persistent data and logs are stored under:
 
 ```text
@@ -63,6 +62,52 @@ by default. PMS and call-accounting test interfaces may bind to other local/LAN 
 
 See [`docs/WINDOWS_QUICK_START.md`](docs/WINDOWS_QUICK_START.md) for the end-user walkthrough.
 
+## Updates
+
+Beginning with the 0.3.1 development line, the application includes an **Update Center**.
+
+Open it from the **Updates** button in the operator window or directly at:
+
+```text
+http://127.0.0.1:8080/updates
+```
+
+The Update Center can:
+
+- check GitHub Releases automatically in the background at startup;
+- check manually with **Check Now**;
+- include or exclude beta/prerelease releases;
+- download a newer `InnAware-PMS-Emulator-Setup.exe`;
+- verify the release asset with SHA-256 before accepting it;
+- launch the verified Windows installer;
+- independently check for and install data-only protocol/stub packs.
+
+Automatic **installation** is deliberately disabled. The program may check automatically, but downloading/installing remains an explicit user action.
+
+`v0.3.0-beta` predates the Update Center, so an existing 0.3.0 installation must be upgraded manually to the first release that contains this feature. Later releases can then be discovered from inside the application.
+
+See [`docs/UPDATES.md`](docs/UPDATES.md) for the release/update contract.
+
+## Protocol / stub packs
+
+Protocol data can be released independently of the executable as:
+
+```text
+InnAware-PMS-Protocol-Pack-<pack-version>.zip
+```
+
+A protocol pack is intentionally **data-only**. It may contain sanitized fixtures/stubs and technician profile definitions for protocol engines already compiled into the application.
+
+It may **not** contain executable Python, DLLs, EXEs, PowerShell, batch files, or other executable code. New parsers, state machines, framing logic, or transports require a normal application release.
+
+Downloaded packs are SHA-256 verified, path-checked, size-limited, and cannot replace built-in technician profiles.
+
+Build the current repository protocol pack with:
+
+```text
+python scripts/build-protocol-pack.py
+```
+
 ## Typical technician workflow
 
 1. Launch **InnAware PMS Emulator**.
@@ -74,16 +119,54 @@ See [`docs/WINDOWS_QUICK_START.md`](docs/WINDOWS_QUICK_START.md) for the end-use
 7. Generate check-ins, check-outs, room moves, wakeups, room-state changes, or call records.
 8. Inspect the live RX/TX capture and protocol state.
 9. Export captures or generate a support bundle when troubleshooting.
+10. Use **Updates** to check application/protocol-pack status when desired.
 
-## Built-in technician profiles in 0.3.0
+## Built-in technician profiles
+
+Current built-in profiles include:
 
 - Generic FIAS PMS - TCP Server
 - Hilton / PEP FIAS - TCP Server
+- **Mitel 1** - Serial
+- **Mitel 2** - Serial
 - TelElectronics InnForm XL - TCP Server
 - HOBIS-A / Holidex - TCP Server
 - Blind SMDR - TCP Server
 
-Other profiles may appear as **encoder** or **planned**. The emulator intentionally reports maturity rather than presenting every known protocol name as production-complete.
+Downloaded data-only protocol packs may add additional technician presets for protocol engines already present in the executable.
+
+## Mitel serial PMS profiles
+
+The user-facing profile names are simply:
+
+```text
+Mitel 1
+Mitel 2
+```
+
+Historical/internal DEFAULT and DEFAULT2 identifiers are retained only as hidden restore aliases for old saved emulator configuration.
+
+### Mitel 1
+
+Classic fixed-width guest-name layout where the room field follows the name field.
+
+### Mitel 2
+
+Compatibility layout where the five-character room field appears before the variable-length guest name. This avoids long guest names shifting the room position.
+
+Default serial preset:
+
+```text
+1200 baud
+8 data bits
+No parity
+1 stop bit
+XON/XOFF
+STX/ETX framing
+ENQ -> ACK -> record -> ACK transaction flow
+```
+
+See [`docs/MITEL_SERIAL_PROFILES.md`](docs/MITEL_SERIAL_PROFILES.md).
 
 ## Current protocol matrix
 
@@ -91,6 +174,8 @@ Other profiles may appear as **encoder** or **planned**. The emulator intentiona
 | --- | --- | --- | --- |
 | FIAS | PMS | stateful | Link negotiation, posting answer, guest events, and property-backed database resync |
 | HILTON_PEP_FIAS | PMS | stateful | Combined Hilton/PEP guest-name behavior and FIAS-family state handling |
+| Mitel 1 | PMS | fixture-backed | Classic serial hotel PMS layout with fixed-width name/room placement |
+| Mitel 2 | PMS | fixture-backed | Serial compatibility layout with room before variable guest name |
 | ONQ | PMS | encoder | Message-generation foundation; additional session behavior remains under development |
 | CHOICE_ADVANTAGE | PMS | encoder | Legacy message-generation foundation |
 | OPERA_LEGACY | PMS | encoder | Legacy Opera-style foundation; FIAS is used for FIAS-family testing |
@@ -103,6 +188,12 @@ Other profiles may appear as **encoder** or **planned**. The emulator intentiona
 | HOBIC / HOBIS2 / HOBIS_B / MICROS_CA / ROOMKEY / PROFITWATCH / RAW_SMDR | Call accounting | planned | Requirements identified; exact fixtures still required before implementation claims |
 
 Compatibility requirements and historical edge cases are tracked in [`docs/PROTOCOL_COMPATIBILITY_ROADMAP.md`](docs/PROTOCOL_COMPATIBILITY_ROADMAP.md).
+
+## Sanitized stub policy
+
+Repository stubs are synthetic fixtures only. They must not contain real guest/customer names, hotel/company names, credentials, or customer-specific data.
+
+The test suite scans the stub set for known real-person/company/vendor strings so accidental data leakage is caught before release.
 
 ## Property-state model
 
@@ -142,7 +233,7 @@ Serial configuration supports:
 - 1/1.5/2 stop bits;
 - none / RTS-CTS / XON-XOFF flow control.
 
-## Framing and call-accounting transactions
+## Framing and transactions
 
 Supported framing includes:
 
@@ -153,15 +244,13 @@ Supported framing includes:
 - STX/ETX;
 - STX/ETX with XOR BCC.
 
-The transactional call-accounting sender supports flows such as:
+Transactional flows include:
 
 ```text
 ENQ -> ACK -> record -> ACK
 ```
 
 with timeout handling, NAK handling, and bounded retries.
-
-Transactional TCP-server sending requires exactly one connected client so an ACK from one peer cannot satisfy a transaction intended for another peer.
 
 ## Capture export and support bundle
 
@@ -183,7 +272,7 @@ It includes runtime information, interface configuration/status, property summar
 
 ## Build the Windows field edition
 
-End users do **not** need Python. These instructions are only for developers building the distributable artifacts.
+End users do **not** need Python. These instructions are only for developers building distributable artifacts.
 
 ### Build prerequisites
 
@@ -216,32 +305,33 @@ powershell -ExecutionPolicy Bypass `
   -Python py
 ```
 
-The builder performs the release gate automatically:
+The builder runs the full Python test suite, creates the one-file/windowed EXE, launches the actual frozen EXE for a runtime smoke test, builds the installer when Inno Setup is available, and generates release ZIP/checksum artifacts.
 
-1. installs/updates build dependencies;
-2. runs the complete pytest suite;
-3. builds the one-file, windowed EXE with PyInstaller;
-4. launches the **actual frozen EXE** on an isolated port/data directory;
-5. verifies health, application metadata, technician profiles, demo-property creation, and support-bundle generation;
-6. terminates the frozen process tree;
-7. creates checksums and the portable ZIP;
-8. creates `Setup.exe` when Inno Setup 6 is available;
-9. creates a clean source ZIP with `git archive`.
-
-Expected outputs:
+Expected 0.3.1 application outputs:
 
 ```text
 dist-windows\InnAware-PMS-Emulator.exe
-dist-windows\InnAware-PMS-Emulator-Setup.exe      # when Inno Setup is available
+dist-windows\InnAware-PMS-Emulator-Setup.exe
 dist-windows\README-WINDOWS.txt
 dist-windows\SHA256SUMS.txt
 
-InnAware-PMS-Emulator-Windows-0.3.0.zip
-InnAware-PMS-Emulator-Source-0.3.0.zip
-SHA256SUMS-WINDOWS-0.3.0.txt
+InnAware-PMS-Emulator-Windows-0.3.1.zip
+InnAware-PMS-Emulator-Source-0.3.1.zip
+SHA256SUMS-WINDOWS-0.3.1.txt
 ```
 
-If Inno Setup is not installed/detected, the build still produces the tested portable EXE, portable ZIP, source ZIP, and checksums.
+Build the independent protocol pack with:
+
+```powershell
+py .\scripts\build-protocol-pack.py
+```
+
+which produces:
+
+```text
+InnAware-PMS-Protocol-Pack-<pack-version>.zip
+InnAware-PMS-Protocol-Pack-<pack-version>.sha256.txt
+```
 
 ## Windows application diagnostics
 
@@ -251,11 +341,11 @@ Runtime diagnostics are written to:
 %LOCALAPPDATA%\InnAware\PMS Emulator\logs\emulator.log
 ```
 
-The Windows launcher is built without a console window. Uvicorn logging is therefore file-backed and does not depend on `stdout`/`stderr` being attached.
+The Windows launcher is built without a console window. Uvicorn logging is file-backed and does not depend on `stdout`/`stderr` being attached.
 
 ## Linux / Debian engineering lab
 
-Linux is supported because it is valuable for headless interoperability testing and automated regression. It is not the primary technician desktop experience.
+Linux is supported for headless interoperability testing and automated regression. It is not the primary technician desktop experience.
 
 Development start:
 
@@ -275,8 +365,6 @@ packaging/systemd/innaware-pms-emulator.service
 scripts/install-systemd.sh
 scripts/verify-server3.sh
 ```
-
-The deterministic Linux verification script uses an isolated data directory/port and tests the same shared protocol/property core used by Windows.
 
 ## Architecture
 
@@ -299,13 +387,11 @@ The deterministic Linux verification script uses an isolated data directory/port
 
 The protocol engine is deliberately shared. A future WinUI/WinForms shell may improve Windows usability, but it should remain a client/launcher for the shared engine rather than duplicating protocol behavior.
 
-See [`docs/ADR-001-SHARED-CROSS-PLATFORM-CORE.md`](docs/ADR-001-SHARED-CROSS-PLATFORM-CORE.md).
+## Verification status
 
-## Verification status for 0.3.0
+`v0.3.0-beta` passed the Linux/server laboratory regression gate and the actual Windows frozen-EXE/installer build gate.
 
-The 0.3.0 shared tree has passed the Linux/server laboratory regression gate, including persistent property/interface restore. The Windows frozen EXE has also passed the automated frozen-binary smoke test used by the build process.
-
-Public releases should still be treated as prerelease/field-beta until the remaining protocol variants, broader field testing, code signing, and open-source release checklist are completed.
+The 0.3.1 development line adds Mitel 1/2 and update infrastructure. It should remain prerelease until the complete CI matrix, server3 regression, frozen Windows build, installer test, and protocol-pack update test are completed for the final 0.3.1 commit.
 
 ## Safety
 
@@ -317,7 +403,7 @@ The management UI/API should normally remain bound to localhost. Expose it to a 
 
 **Tommy Heggie**
 
-InnAware PMS Emulator was created and is maintained by Tommy Heggie. Contributions may be accepted as the project moves toward a public open-source release.
+InnAware PMS Emulator was created and is maintained by Tommy Heggie.
 
 ## Open-source / compatibility boundary
 
@@ -325,4 +411,4 @@ Third-party product and protocol names are descriptive compatibility references 
 
 Do not add copied vendor manuals, proprietary source, third-party logos, customer data, credentials, or other material without a clear right to redistribute it.
 
-The public-release checklist is documented in [`docs/OPEN_SOURCE_READINESS.md`](docs/OPEN_SOURCE_READINESS.md). A final public-source `LICENSE` should be selected deliberately before the repository is made public.
+The public-release checklist is documented in [`docs/OPEN_SOURCE_READINESS.md`](docs/OPEN_SOURCE_READINESS.md).
