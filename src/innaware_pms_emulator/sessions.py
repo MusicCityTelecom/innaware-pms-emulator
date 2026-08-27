@@ -10,6 +10,7 @@ import serial_asyncio
 
 from .framing import ACK, ENQ, NAK, FramingMode, control_name, encode_frame
 from .models import InterfaceConfig, TransportMode
+from .property_state import property_manager
 from .state import CallAccountingStateMachine, EngineAction, FiasStateMachine
 from .transactions import CallAccountingTransactionSender
 
@@ -65,6 +66,7 @@ class InterfaceRuntime:
             "purpose": self.config.purpose.value,
             "protocol": self.config.protocol,
             "transport": self.config.transport.value,
+            "property_id": self.config.property_id,
             "state": self.state,
             "peer": self.peer,
             "connected_clients": len(self.clients),
@@ -85,7 +87,14 @@ class InterfaceManager:
     def _build_engine(config: InterfaceConfig):
         protocol = config.protocol.upper()
         if protocol in {"FIAS", "HILTON_PEP_FIAS"}:
-            return FiasStateMachine(role=str(config.options.get("role", "pms")))
+            provider = None
+            if config.property_id:
+                property_id = config.property_id
+                provider = lambda: property_manager.fias_sync_records(property_id, protocol)
+            return FiasStateMachine(
+                role=str(config.options.get("role", "pms")),
+                sync_records_provider=provider,
+            )
         if protocol in {"INNFORM_XL", "HOBIS"}:
             return CallAccountingStateMachine(
                 ack_type=str(config.options.get("ack_type", "ack")),
@@ -109,14 +118,20 @@ class InterfaceManager:
         for config in configs:
             try:
                 await self.create(config)
-            except Exception:
-                # A bad persisted endpoint must not prevent the emulator from starting.
+            except Exception as exc:
                 key = config.name.strip().lower()
                 if key not in self._interfaces:
                     self._interfaces[key] = InterfaceRuntime(config=config, engine=self._build_engine(config))
                 runtime = self._interfaces[key]
                 runtime.state = "error"
-                runtime.last_error = "Unable to restore persisted interface"
+                runtime.last_error = f"Unable to restore persisted interface: {exc}"
+
+    async def shutdown(self) -> None:
+        for name in list(self._interfaces):
+            try:
+                await self.stop(name)
+            except Exception:
+                pass
 
     def configs(self) -> list[InterfaceConfig]:
         return [runtime.config for runtime in self._interfaces.values()]
@@ -140,6 +155,7 @@ class InterfaceManager:
         if runtime.state not in {"stopped", "error"}:
             return
         runtime.last_error = None
+        runtime.engine = self._build_engine(runtime.config)
         transport = runtime.config.transport
         if transport is TransportMode.TCP_SERVER:
             await self._start_tcp_server(runtime)
@@ -202,6 +218,8 @@ class InterfaceManager:
             raise ValueError("Interface is not a call-accounting interface")
         if runtime.config.protocol not in {"INNFORM_XL", "HOBIS"}:
             raise ValueError("Transactional sender is currently supported for INNFORM_XL and HOBIS")
+        if runtime.config.transport is TransportMode.TCP_SERVER and len(runtime.clients) != 1:
+            raise RuntimeError("Transactional TCP-server sending requires exactly one connected client")
 
         timeout = float(runtime.config.options.get("ack_timeout", 5.0))
         max_attempts = int(runtime.config.options.get("max_attempts", 3))
@@ -338,17 +356,16 @@ class InterfaceManager:
             runtime.state = "error"
             runtime.last_error = "Serial transport requires serial_device"
             return
-        parity = runtime.config.parity.upper()
         runtime.state = "connecting"
         try:
             reader, writer = await serial_asyncio.open_serial_connection(
                 url=runtime.config.serial_device,
                 baudrate=runtime.config.baud_rate,
                 bytesize=runtime.config.data_bits,
-                parity=parity,
+                parity=runtime.config.parity,
                 stopbits=runtime.config.stop_bits,
-                rtscts=runtime.config.flow_control.lower() == "rtscts",
-                xonxoff=runtime.config.flow_control.lower() == "xonxoff",
+                rtscts=runtime.config.flow_control == "rtscts",
+                xonxoff=runtime.config.flow_control == "xonxoff",
             )
             runtime.reader, runtime.writer = reader, writer
             runtime.peer = runtime.config.serial_device
@@ -365,9 +382,7 @@ class InterfaceManager:
             data = await reader.read(4096)
             if not data:
                 break
-            note = None
-            if len(data) == 1:
-                note = control_name(data[0])
+            note = control_name(data[0]) if len(data) == 1 else None
             runtime.capture("rx", data, peer=peer, note=note)
 
             for byte in data:
