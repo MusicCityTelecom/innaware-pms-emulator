@@ -6,6 +6,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from .models import InterfaceConfig
+from .protocol_packs import active_pack_profiles
 
 
 class InterfaceProfile(BaseModel):
@@ -17,6 +18,7 @@ class InterfaceProfile(BaseModel):
     maturity: str
     defaults: dict[str, Any] = Field(default_factory=dict)
     notes: list[str] = Field(default_factory=list)
+    source: str = "built-in"
 
 
 BUILTIN_PROFILES: dict[str, InterfaceProfile] = {
@@ -171,8 +173,27 @@ BUILTIN_PROFILES: dict[str, InterfaceProfile] = {
 }
 
 
+def _external_profiles() -> dict[str, InterfaceProfile]:
+    result: dict[str, InterfaceProfile] = {}
+    for raw in active_pack_profiles():
+        try:
+            profile = InterfaceProfile.model_validate({**raw, "source": "protocol-pack"})
+        except Exception:
+            continue
+        # Downloaded data is allowed to add profiles, not replace a built-in
+        # profile that shipped with the executable.
+        if profile.id in BUILTIN_PROFILES:
+            continue
+        result[profile.id] = profile
+    return result
+
+
+def _all_profiles() -> dict[str, InterfaceProfile]:
+    return {**BUILTIN_PROFILES, **_external_profiles()}
+
+
 def profile_catalog() -> list[dict[str, Any]]:
-    return [profile.model_dump(mode="json") for profile in BUILTIN_PROFILES.values()]
+    return [profile.model_dump(mode="json") for profile in _all_profiles().values()]
 
 
 def build_interface_from_profile(
@@ -183,7 +204,7 @@ def build_interface_from_profile(
     enabled: bool = True,
     overrides: dict[str, Any] | None = None,
 ) -> InterfaceConfig:
-    profile = BUILTIN_PROFILES.get(profile_id)
+    profile = _all_profiles().get(profile_id)
     if not profile:
         raise KeyError(profile_id)
     data = deepcopy(profile.defaults)
