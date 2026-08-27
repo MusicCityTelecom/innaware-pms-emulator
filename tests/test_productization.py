@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import io
 import json
+import sys
 import zipfile
 
+from innaware_pms_emulator import windows_launcher
 from innaware_pms_emulator.profiles import build_interface_from_profile, profile_catalog
 from innaware_pms_emulator.support import build_support_bundle, capture_export
 
@@ -91,3 +93,27 @@ def test_support_bundle_can_explicitly_include_full_property_state():
     with zipfile.ZipFile(io.BytesIO(data), "r") as archive:
         payload = json.loads(archive.read("properties/FULL_PROPERTY_STATE_CONTAINS_GUEST_DATA.json"))
         assert payload[0]["guests"]["g1"]["last_name"] == "Smith"
+
+
+def test_windowed_server_uses_file_only_uvicorn_logging(monkeypatch, tmp_path):
+    monkeypatch.setenv("INNAWARE_PMS_DATA_DIR", str(tmp_path))
+    captured = {}
+
+    def fake_run(app, **kwargs):
+        captured["app"] = app
+        captured.update(kwargs)
+
+    monkeypatch.setattr(windows_launcher.uvicorn, "run", fake_run)
+    monkeypatch.setattr(sys, "stdout", None)
+    monkeypatch.setattr(sys, "stderr", None)
+
+    windows_launcher._run_server_only("127.0.0.1", 18081, "warning")
+
+    assert captured["app"] == "innaware_pms_emulator.main:app"
+    assert captured["host"] == "127.0.0.1"
+    assert captured["port"] == 18081
+    assert captured["log_level"] == "warning"
+    config = captured["log_config"]
+    assert config["handlers"]["file"]["class"] == "logging.FileHandler"
+    assert config["handlers"]["file"]["filename"].endswith("emulator.log")
+    assert all(handler["class"] != "logging.StreamHandler" for handler in config["handlers"].values())
