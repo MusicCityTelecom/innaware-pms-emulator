@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "pack_version": "2026.08.27.1",
+  "minimum_app_version": "0.3.1",
+  "description": "Sanitized InnAware PMS Emulator protocol fixtures and data-only profile definitions.",
+  "profiles": []
+}
