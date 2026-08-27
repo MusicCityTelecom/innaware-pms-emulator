@@ -16,7 +16,7 @@ from typing import Any
 
 import uvicorn
 
-from . import __version__
+from innaware_pms_emulator import __version__
 
 APP_TITLE = "InnAware PMS Emulator"
 
