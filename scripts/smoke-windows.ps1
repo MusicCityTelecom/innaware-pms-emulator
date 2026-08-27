@@ -15,7 +15,7 @@ $LogPath = Join-Path $TempData "logs\emulator.log"
 
 function Show-SmokeLog {
     if (Test-Path $LogPath) {
-        Write-Host "" 
+        Write-Host ""
         Write-Host "===== FROZEN EXE DIAGNOSTIC LOG =====" -ForegroundColor Yellow
         Get-Content -Path $LogPath -Tail 120 -ErrorAction SilentlyContinue
         Write-Host "===== END DIAGNOSTIC LOG =====" -ForegroundColor Yellow
@@ -64,7 +64,20 @@ try {
         -Method Post `
         -Uri "http://127.0.0.1:$Port/api/v1/scenarios/small-hotel?property_id=windows-smoke" `
         -TimeoutSec 5
-    if ($property.rooms.PSObject.Properties.Count -ne 30) { throw "Frozen build demo property did not contain 30 rooms." }
+
+    # Windows PowerShell 5.1 does not consistently expose Count directly on
+    # PSObject.Properties. Materialize the property-name collection first.
+    $RoomNames = @($property.rooms.PSObject.Properties | ForEach-Object { $_.Name })
+    $RoomCount = $RoomNames.Count
+    Write-Host "Frozen demo property rooms: $RoomCount" -ForegroundColor DarkGray
+    if ($RoomCount -ne 30) {
+        throw "Frozen build demo property contained $RoomCount rooms; expected 30."
+    }
+    foreach ($RequiredRoom in @("101", "102", "103", "310")) {
+        if ($RoomNames -notcontains $RequiredRoom) {
+            throw "Frozen build demo property is missing expected room $RequiredRoom."
+        }
+    }
 
     $bundlePath = Join-Path $TempData "support.zip"
     Invoke-WebRequest -Uri "http://127.0.0.1:$Port/api/v1/support-bundle" -OutFile $bundlePath -TimeoutSec 10
