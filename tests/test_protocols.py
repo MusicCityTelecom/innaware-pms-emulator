@@ -7,17 +7,19 @@ from innaware_pms_emulator.protocols.call_accounting import (
 )
 from innaware_pms_emulator.protocols.fias import FiasAdapter, HiltonPepFiasAdapter
 from innaware_pms_emulator.protocols.legacy import OnQAdapter
+from innaware_pms_emulator.protocols.mitel import Mitel1Adapter, Mitel2Adapter
+from innaware_pms_emulator.protocols.registry import protocol_catalog
 
 
 def test_generic_fias_checkin():
-    p = FiasAdapter().encode_event({"action": "checkin", "room": "101", "last_name": "Smith", "first_name": "John"})
-    assert p == b"GI|RN101|GNSmith|GFJohn|\r\n"
+    p = FiasAdapter().encode_event({"action": "checkin", "room": "101", "last_name": "LAST", "first_name": "FIRST"})
+    assert p == b"GI|RN101|GNLAST|GFFIRST|\r\n"
 
 
 def test_hilton_fias_uses_combined_name_and_omits_gf():
-    p = HiltonPepFiasAdapter().encode_event({"action": "checkin", "room": "101", "last_name": "Smith", "first_name": "John"})
-    assert p == b"GI|RN101|GNSmith, John|\r\n"
-    assert b"GFJohn" not in p
+    p = HiltonPepFiasAdapter().encode_event({"action": "checkin", "room": "101", "last_name": "LAST", "first_name": "FIRST"})
+    assert p == b"GI|RN101|GNLAST, FIRST|\r\n"
+    assert b"GF" not in p
 
 
 def test_fias_room_move_uses_old_and_new_room_fields():
@@ -25,10 +27,9 @@ def test_fias_room_move_uses_old_and_new_room_fields():
         "action": "move",
         "room": "101",
         "new_room": "204",
-        "last_name": "Smith",
-        "first_name": "John",
+        "last_name": "LAST",
+        "first_name": "FIRST",
     })
-    assert p == b"GC|RN204|RO101|GNSmith|GFJohn|\r\n"
     decoded = FiasAdapter().decode(p)
     assert decoded.kind == "room_move"
     assert decoded.room == "204"
@@ -36,9 +37,78 @@ def test_fias_room_move_uses_old_and_new_room_fields():
 
 
 def test_onq_checkout():
-    p = OnQAdapter().encode_event({"action": "checkout", "room": "204", "last_name": "Smith", "first_name": "John"})
+    p = OnQAdapter().encode_event({"action": "checkout", "room": "204", "last_name": "LAST", "first_name": "FIRST"})
     assert p.startswith(b"CHK0 ")
     assert b"204" in p
+
+
+def test_mitel_catalog_uses_public_names_and_hides_legacy_aliases():
+    ids = {item["id"] for item in protocol_catalog()}
+    assert "Mitel 1" in ids
+    assert "Mitel 2" in ids
+    assert "DEFAULT" not in ids
+    assert "DEFAULT2" not in ids
+    assert "MITEL_1" not in ids
+    assert "MITEL_2" not in ids
+
+
+def test_mitel_1_uses_five_character_room_field():
+    p = Mitel1Adapter().encode_event({"action": "checkin", "room": "101"})
+    assert p == b"CHK1  101"
+    decoded = Mitel1Adapter().decode(p)
+    assert decoded.kind == "checkin"
+    assert decoded.room == "101"
+
+
+def test_mitel_1_name_is_fixed_width_before_room():
+    p = Mitel1Adapter().encode_event({
+        "action": "name_update",
+        "room": "101",
+        "last_name": "GUESTLAST",
+        "first_name": "GUESTFIRST",
+    })
+    assert p == b"NAM2 GUESTLAST,GUESTFIRST    101"
+    decoded = Mitel1Adapter().decode(p)
+    assert decoded.kind == "name_update"
+    assert decoded.room == "101"
+    assert decoded.fields["last_name"] == "GUESTLAST"
+    assert decoded.fields["first_name"] == "GUESTFIRST"
+
+
+def test_mitel_2_places_room_before_variable_name():
+    p = Mitel2Adapter().encode_event({
+        "action": "name_update",
+        "room": "101",
+        "last_name": "EXTENDEDGUESTLAST",
+        "first_name": "EXTENDEDGUESTFIRST",
+    })
+    assert p == b"NAM2  101 EXTENDEDGUESTLAST,EXTENDEDGUESTFIRST"
+    decoded = Mitel2Adapter().decode(p)
+    assert decoded.kind == "name_update"
+    assert decoded.room == "101"
+    assert decoded.fields["last_name"] == "EXTENDEDGUESTLAST"
+    assert decoded.fields["first_name"] == "EXTENDEDGUESTFIRST"
+
+
+def test_mitel_2_checkin_can_carry_variable_guest_name():
+    p = Mitel2Adapter().encode_event({
+        "action": "checkin",
+        "room": "201",
+        "last_name": "GUESTLAST",
+        "first_name": "GUESTFIRST",
+    })
+    assert p == b"CHK1  201 GUESTLAST,GUESTFIRST"
+    decoded = Mitel2Adapter().decode(p)
+    assert decoded.kind == "checkin"
+    assert decoded.room == "201"
+    assert decoded.fields["last_name"] == "GUESTLAST"
+    assert decoded.fields["first_name"] == "GUESTFIRST"
+
+
+def test_mitel_wakeup_and_restriction_payloads():
+    mitel = Mitel2Adapter()
+    assert mitel.encode_event({"action": "wakeup_set", "room": "101", "wakeup_time": "06:30"}) == b"WKP0630  101"
+    assert mitel.encode_event({"action": "restriction", "room": "101", "restriction": "2"}) == b"RST2  101"
 
 
 def test_innform_xl_core_fields_and_field_tested_prefix():

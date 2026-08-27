@@ -14,10 +14,40 @@ def test_builtin_profiles_cover_primary_field_workflows():
     catalog = {item["id"]: item for item in profile_catalog()}
     assert "fias-pms-tcp-server" in catalog
     assert "hilton-pep-fias-tcp-server" in catalog
+    assert "mitel-1-serial" in catalog
+    assert "mitel-2-serial" in catalog
     assert "innform-xl-tcp-server" in catalog
     assert "hobis-a-tcp-server" in catalog
     assert catalog["hilton-pep-fias-tcp-server"]["defaults"]["options"]["framing"] == "stx_etx"
+    assert catalog["mitel-1-serial"]["name"] == "Mitel 1"
+    assert catalog["mitel-2-serial"]["name"] == "Mitel 2"
+    assert catalog["mitel-1-serial"]["protocol"] == "Mitel 1"
+    assert catalog["mitel-2-serial"]["protocol"] == "Mitel 2"
+    assert catalog["mitel-1-serial"]["defaults"]["baud_rate"] == 1200
+    assert catalog["mitel-1-serial"]["defaults"]["data_bits"] == 8
+    assert catalog["mitel-1-serial"]["defaults"]["parity"] == "N"
+    assert catalog["mitel-1-serial"]["defaults"]["stop_bits"] == 1
+    assert catalog["mitel-1-serial"]["defaults"]["flow_control"] == "xonxoff"
+    assert catalog["mitel-1-serial"]["defaults"]["options"]["framing"] == "stx_etx"
+    assert catalog["mitel-1-serial"]["defaults"]["options"]["transaction_framing"] == "stx_etx"
+    assert catalog["mitel-1-serial"]["defaults"]["options"]["transactional_enq_ack"] is True
     assert catalog["hobis-a-tcp-server"]["defaults"]["options"]["transaction_framing"] == "stx_etx_bcc"
+
+
+def test_mitel_profile_can_be_instantiated_disabled_until_port_selected():
+    config = build_interface_from_profile(
+        "mitel-2-serial",
+        name="field-mitel",
+        property_id="hotel-a",
+        enabled=False,
+        overrides={"serial_device": "COM7"},
+    )
+    assert config.name == "field-mitel"
+    assert config.protocol == "Mitel 2"
+    assert config.transport.value == "serial"
+    assert config.serial_device == "COM7"
+    assert config.options["framing"] == "stx_etx"
+    assert config.options["transactional_enq_ack"] is True
 
 
 def test_profile_instantiation_allows_safe_overrides():
@@ -88,11 +118,11 @@ def test_support_bundle_can_explicitly_include_full_property_state():
         serial_ports=[],
         captures_by_interface={},
         transactions_by_interface={},
-        full_property_state=[{"id": "hotel-a", "guests": {"g1": {"last_name": "Smith"}}}],
+        full_property_state=[{"id": "hotel-a", "guests": {"g1": {"last_name": "GUESTLAST"}}}],
     )
     with zipfile.ZipFile(io.BytesIO(data), "r") as archive:
         payload = json.loads(archive.read("properties/FULL_PROPERTY_STATE_CONTAINS_GUEST_DATA.json"))
-        assert payload[0]["guests"]["g1"]["last_name"] == "Smith"
+        assert payload[0]["guests"]["g1"]["last_name"] == "GUESTLAST"
 
 
 def test_windowed_server_uses_file_only_uvicorn_logging(monkeypatch, tmp_path):

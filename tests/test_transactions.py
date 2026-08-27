@@ -1,7 +1,7 @@
 import asyncio
 
 from innaware_pms_emulator.framing import ACK, NAK
-from innaware_pms_emulator.transactions import CallAccountingTransactionSender
+from innaware_pms_emulator.transactions import CallAccountingTransactionSender, MitelTransactionSender
 
 
 def test_transaction_success():
@@ -54,3 +54,38 @@ def test_transaction_fails_after_record_naks():
     assert result.success is False
     assert result.stage == "record"
     assert result.attempts == 2
+
+
+def test_mitel_retries_record_without_second_enq():
+    sent = []
+    replies = asyncio.Queue()
+    for value in (ACK, NAK, ACK):
+        replies.put_nowait(value)
+
+    async def send_control(data, note): sent.append(("control", data, note))
+    async def send_record(data, note): sent.append(("record", data, note))
+    async def wait_response(timeout): return await asyncio.wait_for(replies.get(), timeout)
+
+    result = asyncio.run(MitelTransactionSender(timeout=.1, max_attempts=3).run(
+        b"record", send_control=send_control, send_record=send_record, wait_response=wait_response
+    ))
+    assert result.success is True
+    assert [kind for kind, _, _ in sent] == ["control", "record", "record"]
+    assert sent[0][1] == b"\x05"
+
+
+def test_mitel_retries_enq_before_record_phase():
+    sent = []
+    replies = asyncio.Queue()
+    for value in (NAK, ACK, ACK):
+        replies.put_nowait(value)
+
+    async def send_control(data, note): sent.append(("control", data, note))
+    async def send_record(data, note): sent.append(("record", data, note))
+    async def wait_response(timeout): return await asyncio.wait_for(replies.get(), timeout)
+
+    result = asyncio.run(MitelTransactionSender(timeout=.1, max_attempts=3).run(
+        b"record", send_control=send_control, send_record=send_record, wait_response=wait_response
+    ))
+    assert result.success is True
+    assert [kind for kind, _, _ in sent] == ["control", "control", "record"]

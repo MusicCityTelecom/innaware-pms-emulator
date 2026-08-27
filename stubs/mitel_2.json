@@ -1,0 +1,11 @@
+{
+  "profile": "Mitel 2",
+  "synthetic_only": true,
+  "records": {
+    "checkin": "CHK1  101 GUESTLAST,GUESTFIRST",
+    "checkout": "CHK0  101",
+    "name_replace": "NAM2  101 EXTENDEDGUESTLAST,EXTENDEDGUESTFIRST",
+    "wakeup_set": "WKP0630  101",
+    "restriction": "RST2  101"
+  }
+}

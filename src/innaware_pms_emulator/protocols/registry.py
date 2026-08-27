@@ -7,12 +7,24 @@ from .call_accounting import (
 )
 from .fias import FiasAdapter, HiltonPepFiasAdapter
 from .legacy import ChoiceAdvantageAdapter, OnQAdapter, OperaLegacyAdapter
+from .mitel import Mitel1Adapter, Mitel2Adapter
 
 
 def build_registry():
+    mitel_1 = Mitel1Adapter()
+    mitel_2 = Mitel2Adapter()
     return {
         "FIAS": FiasAdapter(),
         "HILTON_PEP_FIAS": HiltonPepFiasAdapter(),
+        "MITEL 1": mitel_1,
+        "MITEL 2": mitel_2,
+        # Historical/internal aliases are retained only so old saved emulator
+        # configurations can be restored. They are hidden from the public
+        # catalog so technicians see only Mitel 1 and Mitel 2.
+        "MITEL_1": mitel_1,
+        "MITEL_2": mitel_2,
+        "DEFAULT": mitel_1,
+        "DEFAULT2": mitel_2,
         "ONQ": OnQAdapter(),
         "CHOICE_ADVANTAGE": ChoiceAdvantageAdapter(),
         "OPERA_LEGACY": OperaLegacyAdapter(),
@@ -34,6 +46,22 @@ _HOBIS_RECOMMENDED = {
     "max_attempts": 3,
 }
 
+_MITEL_RECOMMENDED = {
+    "transport": "serial",
+    "baud_rate": 1200,
+    "data_bits": 8,
+    "parity": "N",
+    "stop_bits": 1,
+    "flow_control": "xonxoff",
+    "framing": "stx_etx",
+    "transaction_framing": "stx_etx",
+    "transactional_enq_ack": True,
+    "auto_ack": True,
+    "ack_enq": True,
+    "ack_timeout": 3.0,
+    "max_attempts": 3,
+}
+
 
 PROTOCOL_METADATA = {
     "FIAS": {
@@ -46,6 +74,22 @@ PROTOCOL_METADATA = {
         "description": "Hilton/PEP FIAS-family adapter using combined guest-name semantics and no separate GF field.",
         "recommended": {"framing": "stx_etx", "role": "pms"},
     },
+    "MITEL 1": {
+        "maturity": "fixture-backed",
+        "public_id": "Mitel 1",
+        "description": "Classic Mitel-style serial hotel PMS layout: fixed-width name field followed by the five-character room field, with ENQ/ACK and STX/ETX transactions.",
+        "recommended": _MITEL_RECOMMENDED,
+    },
+    "MITEL 2": {
+        "maturity": "fixture-backed",
+        "public_id": "Mitel 2",
+        "description": "Mitel-style serial compatibility layout: five-character room field before a variable-length guest name so long names cannot shift the room field.",
+        "recommended": _MITEL_RECOMMENDED,
+    },
+    "MITEL_1": {"hidden": True},
+    "MITEL_2": {"hidden": True},
+    "DEFAULT": {"hidden": True},
+    "DEFAULT2": {"hidden": True},
     "ONQ": {
         "maturity": "encoder",
         "description": "OnQ-style legacy PMS message encoding foundation; additional session behavior remains under development.",
@@ -93,12 +137,18 @@ def protocol_catalog():
     catalog = []
     for key, adapter in REGISTRY.items():
         metadata = PROTOCOL_METADATA.get(key, {})
-        catalog.append({
-            "id": key,
+        if metadata.get("hidden"):
+            continue
+        public_id = metadata.get("public_id", key)
+        item = {
+            "id": public_id,
             "purpose": adapter.purpose,
             "implemented": True,
             **metadata,
-        })
+        }
+        item.pop("hidden", None)
+        item.pop("public_id", None)
+        catalog.append(item)
     catalog.extend([
         {"id": "HOTELKEY", "purpose": "pms", "implemented": False, "transport": "http_server", "maturity": "planned"},
         {"id": "HOBIC", "purpose": "call_accounting", "implemented": False, "maturity": "planned"},

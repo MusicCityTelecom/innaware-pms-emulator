@@ -12,10 +12,11 @@ from .framing import ACK, ENQ, NAK, FramingMode, control_name, encode_frame
 from .models import InterfaceConfig, TransportMode
 from .property_state import property_manager
 from .state import CallAccountingStateMachine, EngineAction, FiasStateMachine
-from .transactions import CallAccountingTransactionSender
+from .transactions import CallAccountingTransactionSender, MitelTransactionSender
 
 
 _TRANSACTIONAL_CA_PROTOCOLS = {"INNFORM_XL", "HOBIS", "HOBIS_A", "HOLIDEX"}
+_TRANSACTIONAL_PMS_PROTOCOLS = {"MITEL 1", "MITEL 2", "MITEL_1", "MITEL_2", "DEFAULT", "DEFAULT2"}
 
 
 @dataclass(slots=True)
@@ -231,11 +232,7 @@ class InterfaceManager:
         sender = CallAccountingTransactionSender(timeout=timeout, max_attempts=max_attempts)
 
         async with runtime.transaction_lock:
-            while not runtime.responses.empty():
-                try:
-                    runtime.responses.get_nowait()
-                except asyncio.QueueEmpty:
-                    break
+            self._clear_responses(runtime)
 
             async def send_control(payload: bytes, note: str) -> None:
                 await self._write(runtime, payload, note=note)
@@ -257,10 +254,61 @@ class InterfaceManager:
             item = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "protocol": runtime.config.protocol,
+                "transaction_type": "call_accounting",
                 **result.as_dict(),
             }
             runtime.transaction_history.append(item)
             return item
+
+    async def send_pms_transaction(self, name: str, record: bytes) -> dict[str, Any]:
+        runtime = self.get(name)
+        if runtime.config.purpose.value != "pms":
+            raise ValueError("Interface is not a PMS interface")
+        if runtime.config.protocol not in _TRANSACTIONAL_PMS_PROTOCOLS:
+            raise ValueError("Transactional PMS sender is currently supported for Mitel 1 and Mitel 2")
+        if runtime.config.transport is TransportMode.TCP_SERVER and len(runtime.clients) != 1:
+            raise RuntimeError("Transactional TCP-server sending requires exactly one connected client")
+
+        timeout = float(runtime.config.options.get("ack_timeout", 3.0))
+        max_attempts = int(runtime.config.options.get("max_attempts", 3))
+        sender = MitelTransactionSender(timeout=timeout, max_attempts=max_attempts)
+
+        async with runtime.transaction_lock:
+            self._clear_responses(runtime)
+
+            async def send_control(payload: bytes, note: str) -> None:
+                await self._write(runtime, payload, note=note)
+
+            async def send_record(payload: bytes, note: str) -> None:
+                framing = runtime.config.options.get("transaction_framing", runtime.config.options.get("framing", "stx_etx"))
+                wire = encode_frame(payload, FramingMode(framing))
+                await self._write(runtime, wire, note=note)
+
+            async def wait_response(timeout_value: float) -> int:
+                return await asyncio.wait_for(runtime.responses.get(), timeout=timeout_value)
+
+            result = await sender.run(
+                record,
+                send_control=send_control,
+                send_record=send_record,
+                wait_response=wait_response,
+            )
+            item = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "protocol": runtime.config.protocol,
+                "transaction_type": "pms",
+                **result.as_dict(),
+            }
+            runtime.transaction_history.append(item)
+            return item
+
+    @staticmethod
+    def _clear_responses(runtime: InterfaceRuntime) -> None:
+        while not runtime.responses.empty():
+            try:
+                runtime.responses.get_nowait()
+            except asyncio.QueueEmpty:
+                break
 
     def captures(self, name: str, limit: int = 200) -> list[dict[str, Any]]:
         runtime = self.get(name)
@@ -268,8 +316,7 @@ class InterfaceManager:
         return [record.as_dict() for record in records]
 
     def transactions(self, name: str, limit: int = 100) -> list[dict[str, Any]]:
-        runtime = self.get(name)
-        return list(runtime.transaction_history)[-max(1, min(limit, 200)):]
+        return list(self.get(name).transaction_history)[-max(1, min(limit, 200)):]
 
     async def _write(self, runtime: InterfaceRuntime, wire: bytes, *, note: str | None = None) -> int:
         sent = 0
@@ -397,7 +444,7 @@ class InterfaceManager:
             if runtime.engine:
                 for action in runtime.engine.feed(data):
                     await self._send_action(runtime, peer, action)
-            elif runtime.config.options.get("auto_ack") and data != bytes((ACK,)):
+            elif runtime.config.options.get("auto_ack") and data not in {bytes((ACK,)), bytes((NAK,))}:
                 await self._send_action(
                     runtime,
                     peer,

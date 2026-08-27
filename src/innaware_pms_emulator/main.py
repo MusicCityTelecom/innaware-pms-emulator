@@ -315,6 +315,14 @@ async def send_guest_event(name: str, event: GuestEvent):
     adapter = REGISTRY[runtime.config.protocol]
     try:
         payload = adapter.encode_event(event.model_dump())
+        if runtime.config.options.get("transactional_enq_ack"):
+            transaction = await manager.send_pms_transaction(name, payload)
+            return {
+                "sent_to": 1 if transaction.get("success") else 0,
+                "protocol": runtime.config.protocol,
+                "hex": payload.hex(" "),
+                "transaction": transaction,
+            }
         recipients = await manager.send(name, payload)
     except ValueError as exc:
         raise HTTPException(400, str(exc))
