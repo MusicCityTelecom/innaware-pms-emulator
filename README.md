@@ -1,53 +1,237 @@
 # InnAware PMS Emulator
 
-A cross-platform PMS and call-accounting emulator for testing hospitality PBX integrations without requiring a live hotel PMS.
+InnAware PMS Emulator is a cross-platform hotel PMS, PBX and call-accounting integration laboratory. It is designed to test hospitality interfaces without requiring a live hotel PMS or billing system.
 
-The same protocol, transport, state-machine and operator-console code is used on the Debian lab appliance and the Windows field edition.
+The project is intentionally separate from the InnAware UCP runtime. The emulator can test InnAware, but the emulator core is designed to remain useful as a standalone interoperability tool.
 
-## Current scope
+> **Development status:** 0.2.0 alpha. Protocol entries carry explicit maturity labels; `implemented` does not mean every vendor-specific edge case has been certified.
 
-The service can model multiple independent interfaces and is designed for:
+## What 0.2.0 adds
 
-- PMS: Hilton OnQ-style legacy framing, Hilton PEP/FIAS, Oracle/Opera FIAS and legacy Opera-style profiles, Choice Advantage-style legacy interfaces, HotelKey-style HTTP/JSON, and generic profile-driven hotel PMS protocols.
-- Call accounting: TelElectronics InnForm XL, HOBIS/HOBIC/Holidex-style ACK/NAK feeds, blind-send/SMDR feeds, and additional fixed-field profiles.
-- Transport roles: TCP server, TCP client, serial, and protocol-specific HTTP endpoints.
-- Test operations: check-in, check-out, guest-name update, room move, wake-up set/cancel, room status, dialing restriction, DND, message waiting, language, link negotiation, and raw message injection.
-- PBX-originated traffic capture: call records, room status, message-count/status, synchronization requests, heartbeats, and arbitrary raw frames.
-- Stateful FIAS negotiation and posting/database-sync responses.
-- Transactional InnForm/HOBIS-style call-accounting exchange with ENQ/ACK, record ACK, timeout, NAK and retry behavior.
-
-This repository is intentionally separate from `innaware-ucp`: it is a test instrument, not runtime PBX code.
+- Persistent multi-property hotel state.
+- Room inventory with room type, building/floor, housekeeping and out-of-order state.
+- Guest and stay/occupancy state kept separately from room operational state.
+- Check-in, check-out and room-move workflows.
+- Calling restriction, DND, MWI count, language and voicemail lifecycle state.
+- Wake-up scheduling/cancellation; scheduled wakeups follow room moves and cancel at checkout.
+- Call-accounting history and property audit events.
+- Property-bound PMS interfaces.
+- FIAS database resync (`DR`) generated from actual active stays (`DS -> GI... -> DE`).
+- Cross-platform browser operator console with a room board.
+- Automatic serial-port discovery (`COMx` on Windows, tty devices on Linux when exposed by the OS).
+- Windows one-file EXE build and GitHub Actions artifact.
+- Hardened Debian systemd service template.
 
 ## Architecture
 
-`InterfaceManager` owns transport sessions. Protocol adapters encode/decode application records and never own sockets directly. State machines observe received wire data and issue protocol responses. The transactional sender handles acknowledgement-driven call-accounting delivery. The browser operator console consumes the same REST API used by automated tests and external tooling.
+The emulator deliberately separates hotel business state from wire protocols:
 
-Interface definitions are persisted as JSON and restored at startup. On Linux the default data directory is `~/.local/share/innaware-pms-emulator`; on Windows it is under `%LOCALAPPDATA%\InnAware\PMS Emulator`. Set `INNAWARE_PMS_DATA_DIR` to override the location.
+```text
+Property State / Hotel Operations
+  properties, rooms, guests, stays, wakeups, calls
+                 |
+                 v
+        Normalized Operations
+                 |
+        Protocol Adapter Layer
+   FIAS / Hilton / legacy / CA formats
+                 |
+       Framing + State Machines
+ ACK/NAK, ENQ, STX/ETX, BCC, retries
+                 |
+          Session Manager
+       TCP client/server / serial
+                 |
+        External PBX or PMS
+```
 
-## Development
+The same core is used on Debian and Windows. The browser console is only a client of the local REST API; protocol/session behavior does not live in the GUI.
+
+## Property model
+
+Each property owns its own room, guest, stay, wake-up, call and event collections. Operations are property-scoped to prevent accidental cross-property state leakage.
+
+A room tracks room type, building/floor, housekeeping/out-of-order state, occupancy, default/current calling restriction, DND, MWI count, language, voicemail lifecycle, call-billing enabled state and a rate-plan label.
+
+Guest identity and stay/occupancy are separate objects. A room continues to exist after checkout and its room-level defaults survive guest turnover.
+
+## Current protocol matrix
+
+| Protocol | Purpose | Maturity | Notes |
+| --- | --- | --- | --- |
+| FIAS | PMS | stateful | Link negotiation, posting answer and property-backed database resync |
+| HILTON_PEP_FIAS | PMS | stateful | Combined guest-name behavior; no separate `GF` field |
+| ONQ | PMS | encoder | Legacy message-generation foundation; session behavior still expanding |
+| CHOICE_ADVANTAGE | PMS | encoder | Legacy message-generation foundation |
+| OPERA_LEGACY | PMS | encoder | Legacy Opera-style foundation; FIAS is used for FIAS-family testing |
+| INNFORM_XL | Call accounting | transactional | Fixed-field records; optional ENQ/ACK transaction mode |
+| HOBIS | Call accounting | transactional | ENQ/ACK then STX/record/ETX/XOR-BCC and ACK |
+| BLIND_SMDR | Call accounting | encoder | Line-oriented blind-send output |
+| HOTELKEY | PMS | planned | HTTP/JSON transport work remains pending |
+| HOBIC / HOBIS_A / HOBIS_B / HOLIDEX / RAW_SMDR | Call accounting | planned | Reserved for verified implementations |
+
+The API exposes the same maturity information at `GET /api/v1/protocols`.
+
+## Supported transports
+
+- TCP server
+- TCP client with reconnect
+- Serial
+- HTTP server placeholder for future HotelKey-style work
+
+Serial settings include baud rate, 5/6/7/8 data bits, N/E/O/M/S parity, 1/1.5/2 stop bits and none/RTS-CTS/XON-XOFF flow control.
+
+## Framing and transactions
+
+Available framing includes raw, CR, LF, CRLF, STX/ETX and STX/ETX with XOR BCC.
+
+The call-accounting transaction engine supports:
+
+```text
+ENQ -> wait ACK -> send record -> wait ACK
+```
+
+with timeout, NAK detection and retry limits. HOBIS recommends STX/ETX+BCC for the record stage. Transactional TCP-server sending requires exactly one connected client so an ACK cannot be ambiguously attributed to the wrong peer.
+
+## Quick development start
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-pip install -e . pytest
-pytest
-uvicorn innaware_pms_emulator.main:app --app-dir src --host 0.0.0.0 --port 8080
+python -m pip install --upgrade pip
+python -m pip install -e . pytest
+pytest -q
+uvicorn innaware_pms_emulator.main:app --app-dir src --host 127.0.0.1 --port 8080
 ```
 
-Then open `http://SERVER:8080/` for the operator console.
+Open `http://127.0.0.1:8080/`.
 
-For a local-only workstation launch:
+For an isolated lab server where remote browser access is intentional, bind to the lab address or `0.0.0.0`. Do not expose the management API to an untrusted/customer network.
+
+## Server3 / Debian systemd installation
+
+The repository includes `packaging/systemd/innaware-pms-emulator.service` and `scripts/install-systemd.sh`.
+
+After tests pass:
 
 ```bash
-innaware-pms-emulator
+cd /opt/innaware/innaware-pms-emulator
+sudo INNAWARE_PMS_BIND=0.0.0.0 sh scripts/install-systemd.sh
 ```
 
-The application entry point binds the management UI to `127.0.0.1:8080` by default. Individual PMS/call-accounting interfaces may still bind to LAN addresses as required.
+The service uses:
+
+- source: `/opt/innaware/innaware-pms-emulator`
+- virtual environment: `/opt/innaware/innaware-pms-emulator/.venv`
+- persistent service data: `/var/lib/innaware-pms-emulator`
+- service account: `innaware-pms-emulator`
+- supplementary `dialout` group for physical serial adapters
+
+Check it with:
+
+```bash
+systemctl status innaware-pms-emulator.service --no-pager
+journalctl -u innaware-pms-emulator.service -n 100 --no-pager
+```
 
 ## Windows field edition
 
-See `docs/WINDOWS_FIELD_EDITION.md`. `scripts/build-windows.ps1` creates a standalone EXE, ZIP package and SHA-256 manifest. The Windows launcher starts the same application core and opens the operator console automatically.
+The Windows edition uses the exact same Python core and operator console.
+
+### Build locally
+
+From PowerShell with Python installed:
+
+```powershell
+git clone https://github.com/MusicCityTelecom/innaware-pms-emulator.git
+cd innaware-pms-emulator
+powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1 -Python py
+```
+
+If `python.exe` rather than the Python Launcher is your command:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1 -Python python
+```
+
+The build runs the full pytest suite before packaging and creates:
+
+```text
+dist-windows\InnAware-PMS-Emulator.exe
+dist-windows\README-WINDOWS.txt
+dist-windows\SHA256SUMS.txt
+InnAware-PMS-Emulator-Windows.zip
+InnAware-PMS-Emulator-Source.zip
+```
+
+### GitHub Actions build
+
+Every relevant push to `main` triggers the **Windows Build** workflow. Its `innaware-pms-emulator-windows` artifact contains the EXE, field ZIP, source ZIP, README and SHA-256 file.
+
+The general **Test** workflow runs the shared core on both Linux and Windows using Python 3.11 and 3.13.
+
+## Persistent data
+
+Default paths:
+
+- Linux: `~/.local/share/innaware-pms-emulator/`
+- Windows: `%LOCALAPPDATA%\InnAware\PMS Emulator\`
+- systemd service: `/var/lib/innaware-pms-emulator/`
+
+Override with `INNAWARE_PMS_DATA_DIR`.
+
+Persistent files currently include interface definitions and property state. Captures and transaction history are intentionally runtime-bounded at this stage; durable capture export is a future feature.
+
+## Useful API areas
+
+```text
+GET    /api/v1/health
+GET    /api/v1/protocols
+GET    /api/v1/serial-ports
+
+GET    /api/v1/properties
+POST   /api/v1/properties
+GET    /api/v1/properties/{property}
+POST   /api/v1/properties/{property}/rooms/bulk
+POST   /api/v1/properties/{property}/checkin
+POST   /api/v1/properties/{property}/checkout
+POST   /api/v1/properties/{property}/move
+POST   /api/v1/properties/{property}/wakeups
+POST   /api/v1/properties/{property}/calls
+GET    /api/v1/properties/{property}/events
+POST   /api/v1/scenarios/small-hotel
+
+GET    /api/v1/interfaces
+POST   /api/v1/interfaces
+POST   /api/v1/interfaces/{name}/start
+POST   /api/v1/interfaces/{name}/stop
+GET    /api/v1/interfaces/{name}/captures
+GET    /api/v1/interfaces/{name}/transactions
+POST   /api/v1/interfaces/{name}/send/raw
+POST   /api/v1/interfaces/{name}/send/control
+POST   /api/v1/interfaces/{name}/send/guest-event
+POST   /api/v1/interfaces/{name}/send/call-record
+POST   /api/v1/interfaces/{name}/send/call-record-transaction
+```
+
+## Demo scenario
+
+The operator console can seed a deterministic small hotel with 30 rooms, two occupied rooms, one dirty room and one scheduled wake-up. The same scenario is available through:
+
+```text
+POST /api/v1/scenarios/small-hotel?property_id=demo-hotel
+```
+
+This is the beginning of a larger deterministic scenario runner for reconnect, resync, malformed-frame, retry and recovery testing.
 
 ## Safety
 
-Use this only on isolated lab/test interfaces. Do not point an emulator instance at production PMS or billing endpoints unless you explicitly intend to generate test transactions. Keep the management HTTP service bound to localhost unless remote administration is explicitly required and appropriately protected.
+This is a test instrument. It can generate real protocol traffic. Do not point it at production PMS, billing or customer endpoints unless test transactions are explicitly intended.
+
+The management UI/API binds to localhost by default in the Windows launcher and application entry point. LAN exposure should be deliberate.
+
+## Compatibility and open-source boundary
+
+Third-party product/protocol names are descriptive compatibility references and do not imply sponsorship or endorsement. Do not add vendor logos, copied manuals, proprietary source or distinctive third-party documentation to this repository.
+
+The intended public-release provenance process is documented in `docs/OPEN_SOURCE_READINESS.md`. A final public-source `LICENSE` has **not** been selected yet and should be chosen deliberately before making the repository public.
