@@ -1,4 +1,10 @@
-from .call_accounting import BlindSmdrAdapter, HobisAdapter, InnFormXLAdapter
+from .call_accounting import (
+    BlindSmdrAdapter,
+    HobisAAdapter,
+    HobisAdapter,
+    HolidexAdapter,
+    InnFormXLAdapter,
+)
 from .fias import FiasAdapter, HiltonPepFiasAdapter
 from .legacy import ChoiceAdvantageAdapter, OnQAdapter, OperaLegacyAdapter
 
@@ -12,11 +18,21 @@ def build_registry():
         "OPERA_LEGACY": OperaLegacyAdapter(),
         "INNFORM_XL": InnFormXLAdapter(),
         "HOBIS": HobisAdapter(),
+        "HOBIS_A": HobisAAdapter(),
+        "HOLIDEX": HolidexAdapter(),
         "BLIND_SMDR": BlindSmdrAdapter(),
     }
 
 
 REGISTRY = build_registry()
+
+
+_HOBIS_RECOMMENDED = {
+    "framing": "raw",
+    "transaction_framing": "stx_etx_bcc",
+    "ack_timeout": 5.0,
+    "max_attempts": 3,
+}
 
 
 PROTOCOL_METADATA = {
@@ -47,13 +63,23 @@ PROTOCOL_METADATA = {
     },
     "INNFORM_XL": {
         "maturity": "transactional",
-        "description": "TelElectronics InnForm XL-style fixed-field call-accounting records with optional ENQ/ACK transaction mode.",
+        "description": "TelElectronics InnForm XL/TEL fixed-field call-accounting records with optional ENQ/ACK transaction mode.",
         "recommended": {"framing": "raw", "transaction_framing": "raw", "ack_timeout": 5.0, "max_attempts": 3},
     },
     "HOBIS": {
         "maturity": "transactional",
-        "description": "HOBIS-style call-accounting transaction: ENQ/ACK followed by STX record ETX XOR-BCC and ACK.",
-        "recommended": {"framing": "raw", "transaction_framing": "stx_etx_bcc", "ack_timeout": 5.0, "max_attempts": 3},
+        "description": "Verified HOBIS-A fixed-field call record with ENQ/ACK then STX record ETX XOR-BCC and ACK.",
+        "recommended": _HOBIS_RECOMMENDED,
+    },
+    "HOBIS_A": {
+        "maturity": "transactional",
+        "description": "Explicit HOBIS-A compatibility name using the verified HOBIS-A fixed-field layout.",
+        "recommended": _HOBIS_RECOMMENDED,
+    },
+    "HOLIDEX": {
+        "maturity": "transactional",
+        "description": "Holidex compatibility alias for the verified HOBIS/Holidex HOBIS-A transaction family.",
+        "recommended": _HOBIS_RECOMMENDED,
     },
     "BLIND_SMDR": {
         "maturity": "encoder",
@@ -76,9 +102,11 @@ def protocol_catalog():
     catalog.extend([
         {"id": "HOTELKEY", "purpose": "pms", "implemented": False, "transport": "http_server", "maturity": "planned"},
         {"id": "HOBIC", "purpose": "call_accounting", "implemented": False, "maturity": "planned"},
-        {"id": "HOBIS_A", "purpose": "call_accounting", "implemented": False, "maturity": "planned"},
+        {"id": "HOBIS2", "purpose": "call_accounting", "implemented": False, "maturity": "planned", "description": "Five-digit-extension HOBIS variant; exact fixture work pending."},
         {"id": "HOBIS_B", "purpose": "call_accounting", "implemented": False, "maturity": "planned"},
-        {"id": "HOLIDEX", "purpose": "call_accounting", "implemented": False, "maturity": "planned"},
+        {"id": "MICROS_CA", "purpose": "call_accounting", "implemented": False, "maturity": "planned"},
+        {"id": "ROOMKEY", "purpose": "call_accounting", "implemented": False, "maturity": "planned"},
+        {"id": "PROFITWATCH", "purpose": "call_accounting", "implemented": False, "maturity": "planned"},
         {"id": "RAW_SMDR", "purpose": "call_accounting", "implemented": False, "maturity": "planned"},
     ])
     return catalog
