@@ -93,6 +93,9 @@ if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
 $Exe = Join-Path $OutputDir "InnAware-PMS-Emulator.exe"
 if (-not (Test-Path $Exe)) { throw "Windows executable was not produced: $Exe" }
 
+$SmokeScript = Join-Path $PSScriptRoot "smoke-windows.ps1"
+& $SmokeScript -Exe $Exe
+
 $Readme = @"
 InnAware PMS Emulator $Version - Windows Field Build
 
