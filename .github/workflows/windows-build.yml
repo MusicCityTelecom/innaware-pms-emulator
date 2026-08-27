@@ -73,7 +73,7 @@ jobs:
         with:
           name: InnAware PMS Emulator ${{ github.ref_name }}
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+          prerelease: ${{ startsWith(github.ref_name, 'v0.') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
           files: |
             dist-windows/InnAware-PMS-Emulator-Setup.exe
             dist-windows/InnAware-PMS-Emulator.exe
