@@ -27,6 +27,23 @@ def test_fias_pms_answers_posting_request():
     assert b"PA|RN101|ASOK|P#77|" in actions[0].payload
 
 
+def test_fias_database_sync_includes_property_guest_records():
+    sm = FiasStateMachine(
+        role="pms",
+        sync_records_provider=lambda: [
+            b"GI|RN101|GNSmith|GFJohn|",
+            b"GI|RN103|GNDoe|GFJane|",
+        ],
+    )
+    actions = sm.feed(b"DR|DA250825|TI001500|\r\n")
+    payloads = [action.payload for action in actions]
+    assert payloads[0].startswith(b"DS|")
+    assert payloads[1] == b"GI|RN101|GNSmith|GFJohn|"
+    assert payloads[2] == b"GI|RN103|GNDoe|GFJane|"
+    assert payloads[-1].startswith(b"DE|")
+    assert sm.last_sync_count == 2
+
+
 def test_call_accounting_acknowledges_enq():
     sm = CallAccountingStateMachine()
     actions = sm.feed(bytes((ENQ,)))
