@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
@@ -276,6 +277,7 @@ async def cancel_wakeup(property_id: str, request: WakeupCancelRequest):
 @router.post("/properties/{property_id}/calls")
 async def record_property_call(property_id: str, request: PropertyCallRequest):
     _property_or_404(property_id)
+    timestamp = request.timestamp or datetime.now(timezone.utc).isoformat()
     record = CallAccountingState(
         id=f"call-{uuid4().hex[:12]}",
         room=request.room,
@@ -283,11 +285,9 @@ async def record_property_call(property_id: str, request: PropertyCallRequest):
         duration_seconds=request.duration_seconds,
         cost=request.cost,
         call_type=request.call_type,
-        timestamp=request.timestamp or "",
+        timestamp=timestamp,
         description=request.description,
     )
-    if not record.timestamp:
-        record.timestamp = CallAccountingState.model_fields["timestamp"].default_factory()
     try:
         property_manager.record_call(property_id, record)
     except ValueError as exc:
@@ -300,7 +300,16 @@ async def record_property_call(property_id: str, request: PropertyCallRequest):
             if runtime.config.purpose.value != "call_accounting":
                 raise ValueError("Selected interface is not a call-accounting interface")
             adapter = REGISTRY[runtime.config.protocol]
-            payload = adapter.encode_call(request.model_dump())
+            call_payload = CallRecord(
+                room=request.room,
+                number=request.number,
+                duration_seconds=request.duration_seconds,
+                cost=request.cost,
+                call_type=request.call_type,
+                timestamp=timestamp,
+                description=request.description,
+            )
+            payload = adapter.encode_call(call_payload.model_dump())
             if request.transactional:
                 transaction = await manager.send_call_transaction(request.interface_name, payload)
                 transmission = {"ok": bool(transaction.get("success")), "transaction": transaction, "hex": payload.hex(" ")}
