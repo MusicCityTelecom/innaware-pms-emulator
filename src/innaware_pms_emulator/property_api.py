@@ -129,6 +129,9 @@ def get_property(property_id: str):
 @router.delete("/properties/{property_id}", status_code=204)
 def delete_property(property_id: str):
     _property_or_404(property_id)
+    bound = [item["name"] for item in manager.list() if item.get("property_id", "").lower() == property_id.lower()]
+    if bound:
+        raise HTTPException(409, f"Property is still bound to interface(s): {', '.join(bound)}")
     property_manager.delete(property_id)
 
 
