@@ -36,12 +36,10 @@ Write-Host "Building InnAware PMS Emulator $Version" -ForegroundColor Cyan
 & $Py -m pytest -q
 if ($LASTEXITCODE -ne 0) { throw "Regression tests failed; refusing to package Windows executable." }
 
-if (Test-Path $OutputDir) {
-    Remove-Item -Recurse -Force $OutputDir
-}
+if (Test-Path $OutputDir) { Remove-Item -Recurse -Force $OutputDir }
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
-$VersionParts = $Version.Split('.')
+$VersionParts = @($Version.Split('.'))
 while ($VersionParts.Count -lt 4) { $VersionParts += '0' }
 $VersionTuple = ($VersionParts[0..3] -join ', ')
 $VersionFile = Join-Path $env:TEMP "innaware-pms-version-info.txt"
@@ -93,9 +91,7 @@ VSVersionInfo(
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
 
 $Exe = Join-Path $OutputDir "InnAware-PMS-Emulator.exe"
-if (-not (Test-Path $Exe)) {
-    throw "Windows executable was not produced: $Exe"
-}
+if (-not (Test-Path $Exe)) { throw "Windows executable was not produced: $Exe" }
 
 $Readme = @"
 InnAware PMS Emulator $Version - Windows Field Build
@@ -118,10 +114,13 @@ The management API binds to 127.0.0.1:8080 by default. PMS/call-accounting inter
 
 SUPPORT
 =======
-A privacy-aware support bundle is available from:
+Privacy-aware support bundle:
   http://127.0.0.1:8080/api/v1/support-bundle
 
-Full guest/property state is excluded by default.
+Capture export:
+  http://127.0.0.1:8080/api/v1/interfaces/INTERFACE_NAME/captures/export?format=csv
+
+Full guest/property state is excluded from support bundles by default.
 
 COMMAND-LINE OPTIONS
 ====================
@@ -136,22 +135,25 @@ This software is a test/emulation instrument. Do not connect it to a production 
 "@
 Set-Content -Path (Join-Path $OutputDir "README-WINDOWS.txt") -Value $Readme -Encoding utf8
 
-$HashLines = @()
 $ExeHash = Get-FileHash -Algorithm SHA256 $Exe
-$HashLines += "$($ExeHash.Hash.ToLower())  InnAware-PMS-Emulator.exe"
+$HashLines = @("$($ExeHash.Hash.ToLower())  InnAware-PMS-Emulator.exe")
 Set-Content -Path (Join-Path $OutputDir "SHA256SUMS.txt") -Value $HashLines -Encoding ascii
 
 $Installer = $null
+$InstallerHash = $null
 if (-not $SkipInstaller) {
-    $IsccCandidates = @(
-        "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
-        "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
-    ) | Where-Object { $_ -and (Test-Path $_) }
+    $ProgramFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+    $ProgramFiles64 = [Environment]::GetEnvironmentVariable("ProgramFiles")
+    $IsccCandidates = @()
+    if ($ProgramFilesX86) { $IsccCandidates += (Join-Path $ProgramFilesX86 "Inno Setup 6\ISCC.exe") }
+    if ($ProgramFiles64) { $IsccCandidates += (Join-Path $ProgramFiles64 "Inno Setup 6\ISCC.exe") }
+    $IsccCandidates = @($IsccCandidates | Where-Object { Test-Path $_ })
 
     if ($IsccCandidates.Count -gt 0) {
         $Iscc = $IsccCandidates[0]
         $Iss = Join-Path $RepoRoot "packaging\windows\InnAware-PMS-Emulator.iss"
-        & $Iscc "/DAppVersion=$Version" "/DSourceDir=$((Resolve-Path $OutputDir).Path)" $Iss
+        $ResolvedOutput = (Resolve-Path $OutputDir).Path
+        & $Iscc "/DAppVersion=$Version" "/DSourceDir=$ResolvedOutput" $Iss
         if ($LASTEXITCODE -ne 0) { throw "Inno Setup build failed" }
         $Installer = Join-Path $OutputDir "InnAware-PMS-Emulator-Setup.exe"
         if (-not (Test-Path $Installer)) { throw "Installer build completed but Setup.exe was not found" }
@@ -185,10 +187,9 @@ $ReleaseSums = @(
     "$($ZipHash.Hash.ToLower())  $(Split-Path -Leaf $Zip)",
     "$($SourceHash.Hash.ToLower())  $(Split-Path -Leaf $SourceZip)"
 )
-if ($Installer) {
-    $ReleaseSums += "$($InstallerHash.Hash.ToLower())  InnAware-PMS-Emulator-Setup.exe"
-}
-Set-Content -Path (Join-Path $RepoRoot "SHA256SUMS-WINDOWS-$Version.txt") -Value $ReleaseSums -Encoding ascii
+if ($InstallerHash) { $ReleaseSums += "$($InstallerHash.Hash.ToLower())  InnAware-PMS-Emulator-Setup.exe" }
+$ReleaseChecksumFile = Join-Path $RepoRoot "SHA256SUMS-WINDOWS-$Version.txt"
+Set-Content -Path $ReleaseChecksumFile -Value $ReleaseSums -Encoding ascii
 
 Write-Host ""
 Write-Host "Build complete:" -ForegroundColor Green
@@ -197,4 +198,4 @@ Write-Host "  Portable EXE: $Exe"
 if ($Installer) { Write-Host "  Installer:    $Installer" }
 Write-Host "  Windows ZIP:  $Zip"
 Write-Host "  Source ZIP:   $SourceZip"
-Write-Host "  Checksums:    $(Join-Path $RepoRoot "SHA256SUMS-WINDOWS-$Version.txt")"
+Write-Host "  Checksums:    $ReleaseChecksumFile"
