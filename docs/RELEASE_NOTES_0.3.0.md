@@ -1,8 +1,31 @@
 # InnAware PMS Emulator 0.3.0 - Windows Field Beta
 
+**Author:** Tommy Heggie
+
 0.3.0 is the first productization milestone intended to be packaged for normal Windows users without requiring Python or a development environment.
 
-It remains a prerelease because several protocol families are still encoder-only or planned and the Windows package must be smoke-tested on real Windows hardware before publication.
+It remains a prerelease because several protocol families are still encoder-only or planned and broader field validation/code signing remain pending.
+
+## Verified milestone status
+
+The 0.3.0 shared core has passed the Linux/server laboratory regression and persistence gate.
+
+The Windows portable build has also completed successfully on an actual Windows 10 x64 workstation, including:
+
+- complete Python regression suite;
+- PyInstaller one-file/windowed EXE generation;
+- frozen-EXE startup;
+- health endpoint verification;
+- application metadata verification;
+- technician-profile verification;
+- 30-room demo-property creation;
+- privacy-aware support-bundle generation;
+- frozen process-tree cleanup;
+- portable ZIP creation;
+- clean source ZIP creation;
+- SHA-256 manifest generation.
+
+A development build may omit `InnAware-PMS-Emulator-Setup.exe` when Inno Setup 6 is not installed or detected; that does not invalidate the already smoke-tested portable EXE/ZIP. The build script now searches `PATH`, Program Files, Program Files (x86), and the common per-user `%LOCALAPPDATA%\Programs\Inno Setup 6` installation path.
 
 ## Primary product target
 
@@ -12,7 +35,7 @@ Both platforms use the exact same protocol, property-state, framing, transaction
 
 ## Windows desktop application
 
-The Windows launcher now:
+The Windows launcher:
 
 - starts the emulator engine as a managed child process;
 - opens the operator console in a native Windows WebView window;
@@ -21,14 +44,15 @@ The Windows launcher now:
 - detects a management-port conflict with another application;
 - shuts down the child engine when the native application window closes;
 - records startup/runtime diagnostics in `logs\emulator.log`;
-- supports browser/foreground modes for diagnostics.
+- supports browser/foreground modes for diagnostics;
+- uses file-backed Uvicorn logging so a `--windowed` frozen build does not depend on `stdout`/`stderr`.
 
 ## Distribution
 
-The Windows build produces:
+The Windows build can produce:
 
 - `InnAware-PMS-Emulator.exe` - portable one-file application;
-- `InnAware-PMS-Emulator-Setup.exe` - per-user installer built with Inno Setup;
+- `InnAware-PMS-Emulator-Setup.exe` - per-user installer when Inno Setup 6 is available;
 - `InnAware-PMS-Emulator-Windows-0.3.0.zip` - portable field package;
 - `InnAware-PMS-Emulator-Source-0.3.0.zip` - source archive;
 - SHA-256 checksum manifests.
@@ -37,9 +61,11 @@ The installer defaults to `%LOCALAPPDATA%\Programs\InnAware PMS Emulator`, creat
 
 Saved application data is outside the installation directory and is intentionally retained when the application is uninstalled.
 
+Windows executable and installer metadata attribute the project to **Tommy Heggie**.
+
 ## Technician profiles
 
-Built-in interface profiles now cover the primary tested workflows:
+Built-in interface profiles cover the primary tested workflows:
 
 - Generic FIAS PMS TCP server;
 - Hilton/PEP FIAS TCP server;
@@ -99,18 +125,16 @@ The following are not claimed complete in 0.3.0:
 
 The protocol catalog reports these distinctions at runtime.
 
-## Release gate
+## Remaining release gate
 
-Before creating the `v0.3.0` tag:
+Before treating `v0.3.0` as a broadly downloadable field beta:
 
-1. server3 full regression/productization verification must pass;
-2. Windows build script must complete on an actual Windows workstation;
-3. portable EXE must launch into the native operator window;
-4. application must restart with saved property/interface state;
-5. at least one Windows TCP PMS interface must be exercised;
-6. available COM ports must enumerate on Windows hardware;
-7. support-bundle download must be opened and inspected;
-8. `Setup.exe` install, launch and uninstall must be smoke-tested;
-9. SHA-256 outputs must be retained with the release.
+1. build `Setup.exe` with Inno Setup 6 and smoke-test install/launch/uninstall;
+2. launch the native application window manually and exercise saved-state reopen behavior;
+3. exercise at least one Windows TCP PMS interface against another endpoint;
+4. confirm real Windows COM-port enumeration on field hardware;
+5. open and inspect a generated support bundle;
+6. retain the final SHA-256 outputs with the release;
+7. choose the final public-source license before making the repository public.
 
-Once those gates pass, pushing tag `v0.3.0` will cause the GitHub workflow to publish a prerelease automatically when GitHub-hosted Windows runners are available.
+Once those gates pass, the `v0.3.0` prerelease assets are suitable for normal technician download/testing. Public code signing remains recommended before broad external distribution.
