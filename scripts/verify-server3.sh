@@ -15,13 +15,18 @@ cleanup() {
         wait "$PID" 2>/dev/null || true
     fi
     rm -rf "$TMP_DATA" 2>/dev/null || true
+    rm -f /tmp/innaware-pms-verify-property.json \
+          /tmp/innaware-pms-verify-hilton.json \
+          /tmp/innaware-pms-verify-profiles.json \
+          /tmp/innaware-pms-verify-support.zip
 }
 trap cleanup EXIT INT TERM
 
 cd "$REPO" || exit 1
+VERSION="$(.venv/bin/python -c 'import innaware_pms_emulator; print(innaware_pms_emulator.__version__)' 2>/dev/null)"
 
 printf '%s\n' "============================================================"
-printf '%s\n' " INNAWARE PMS EMULATOR 0.2.0 - SERVER3 VERIFICATION"
+printf '%s\n' " INNAWARE PMS EMULATOR ${VERSION:-UNKNOWN} - SERVER3 VERIFICATION"
 printf '%s\n' "============================================================"
 printf '%s\n' "# Diagnostic/test run only."
 printf '%s\n' "# Uses an isolated temporary data directory."
@@ -72,13 +77,25 @@ export INNAWARE_PMS_DATA_DIR="$TMP_DATA"
 PID=$!
 
 api_ready=0
-for _ in $(seq 1 50); do
+for _ in $(seq 1 80); do
     if curl -fsS "http://127.0.0.1:${PORT}/api/v1/health" >/dev/null 2>&1; then
         api_ready=1
         break
     fi
     sleep 0.1
 done
+
+health_rc=1
+appinfo_rc=1
+protocols_rc=1
+profiles_rc=1
+seed_rc=1
+seed_assert_rc=1
+profile_interface_rc=1
+hilton_rc=1
+hilton_assert_rc=1
+support_rc=1
+support_assert_rc=1
 
 if [ "$api_ready" -ne 1 ]; then
     printf '%s\n' "ERROR: isolated API did not become ready."
@@ -89,9 +106,27 @@ else
     curl -fsS "http://127.0.0.1:${PORT}/api/v1/health" | .venv/bin/python -m json.tool
     health_rc=$?
 
+    printf '%s\n' "--- app info ---"
+    curl -fsS "http://127.0.0.1:${PORT}/api/v1/app-info" | .venv/bin/python -m json.tool
+    appinfo_rc=$?
+
     printf '%s\n' "--- protocol catalog ---"
     curl -fsS "http://127.0.0.1:${PORT}/api/v1/protocols" | .venv/bin/python -m json.tool
     protocols_rc=$?
+
+    printf '%s\n' "--- technician profiles ---"
+    curl -fsS "http://127.0.0.1:${PORT}/api/v1/profiles" >/tmp/innaware-pms-verify-profiles.json
+    profiles_rc=$?
+    if [ "$profiles_rc" -eq 0 ]; then
+        .venv/bin/python - <<'PY'
+import json
+p = json.load(open('/tmp/innaware-pms-verify-profiles.json'))
+ids = {x['id'] for x in p['profiles']}
+print('profiles:', ', '.join(sorted(ids)))
+assert {'fias-pms-tcp-server', 'hilton-pep-fias-tcp-server', 'innform-xl-tcp-server', 'hobis-a-tcp-server'} <= ids
+PY
+        profiles_rc=$?
+    fi
 
     printf '%s\n' "--- seed demo property ---"
     curl -fsS -X POST \
@@ -112,17 +147,15 @@ assert p['rooms']['103']['active_stay_id'] == 'stay-demo-2'
 assert p['rooms']['102']['housekeeping'] == 'dirty'
 PY
         seed_assert_rc=$?
-    else
-        seed_assert_rc=92
     fi
 
-    printf '%s\n' "--- property-bound disabled FIAS interface ---"
+    printf '%s\n' "--- instantiate disabled FIAS technician profile ---"
     curl -fsS -X POST \
-        "http://127.0.0.1:${PORT}/api/v1/interfaces" \
+        "http://127.0.0.1:${PORT}/api/v1/profiles/fias-pms-tcp-server/instantiate" \
         -H 'Content-Type: application/json' \
-        -d '{"name":"verify-fias","purpose":"pms","protocol":"FIAS","transport":"tcp_server","property_id":"verify-hotel","enabled":false,"bind_host":"127.0.0.1","port":19001,"options":{"framing":"crlf","role":"pms"}}' \
+        -d '{"name":"verify-fias","property_id":"verify-hotel","enabled":false,"overrides":{"bind_host":"127.0.0.1","port":19001}}' \
         | .venv/bin/python -m json.tool
-    interface_rc=$?
+    profile_interface_rc=$?
 
     printf '%s\n' "--- Hilton combined name fixture ---"
     curl -fsS -X POST \
@@ -140,25 +173,44 @@ assert p['text'] == 'GI|RN101|GNSmith, John|\r\n'
 assert 'GFJohn' not in p['text']
 PY
         hilton_assert_rc=$?
-    else
-        hilton_assert_rc=93
+    fi
+
+    printf '%s\n' "--- privacy-aware support bundle ---"
+    curl -fsS "http://127.0.0.1:${PORT}/api/v1/support-bundle" -o /tmp/innaware-pms-verify-support.zip
+    support_rc=$?
+    if [ "$support_rc" -eq 0 ]; then
+        .venv/bin/python - <<'PY'
+import zipfile
+path = '/tmp/innaware-pms-verify-support.zip'
+with zipfile.ZipFile(path) as z:
+    names = set(z.namelist())
+    print('support bundle entries:', len(names))
+    assert 'manifest.json' in names
+    assert 'interfaces/config.json' in names
+    assert 'properties/summary.json' in names
+    assert 'properties/PRIVACY.txt' in names
+    assert 'properties/FULL_PROPERTY_STATE_CONTAINS_GUEST_DATA.json' not in names
+PY
+        support_assert_rc=$?
     fi
 
     if [ "$health_rc" -eq 0 ] && \
+       [ "$appinfo_rc" -eq 0 ] && \
        [ "$protocols_rc" -eq 0 ] && \
+       [ "$profiles_rc" -eq 0 ] && \
        [ "$seed_rc" -eq 0 ] && \
        [ "$seed_assert_rc" -eq 0 ] && \
-       [ "$interface_rc" -eq 0 ] && \
+       [ "$profile_interface_rc" -eq 0 ] && \
        [ "$hilton_rc" -eq 0 ] && \
-       [ "$hilton_assert_rc" -eq 0 ]; then
+       [ "$hilton_assert_rc" -eq 0 ] && \
+       [ "$support_rc" -eq 0 ] && \
+       [ "$support_assert_rc" -eq 0 ]; then
         api_rc=0
     else
         api_rc=94
     fi
 fi
 printf 'API smoke rc=%s\n\n' "$api_rc"
-
-rm -f /tmp/innaware-pms-verify-property.json /tmp/innaware-pms-verify-hilton.json
 
 printf '%s\n' "===== SOURCE ARCHIVE ====="
 SOURCE_ZIP="/tmp/InnAware-PMS-Emulator-Source-$(git rev-parse --short HEAD).zip"
