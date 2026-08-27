@@ -48,6 +48,11 @@ class FiasAdapter:
             return self._line("GO", ("RN", room))
         if action in ("name", "name_update"):
             return self._line("GC", ("RN", room), *self._guest_name_fields(last, first))
+        if action in ("move", "room_move"):
+            new_room = event.get("new_room", "")
+            if not new_room:
+                raise ValueError("FIAS room move requires new_room")
+            return self._line("GC", ("RN", new_room), ("RO", room), *self._guest_name_fields(last, first))
         if action == "wakeup_set":
             return self._line("WR", ("RN", room), ("DA", event.get("wakeup_date")), ("TI", event.get("wakeup_time")))
         if action == "wakeup_cancel":
@@ -71,7 +76,8 @@ class FiasAdapter:
             "LA": "link_alive", "LE": "link_end",
             "PS": "posting", "PR": "posting_response",
         }
-        return DecodedRecord(mapping.get(code, "unknown"), room, {"code": code, **fields}, payload)
+        event_type = "room_move" if code == "GC" and fields.get("RO") else mapping.get(code, "unknown")
+        return DecodedRecord(event_type, room, {"code": code, **fields}, payload)
 
 
 class HiltonPepFiasAdapter(FiasAdapter):
