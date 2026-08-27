@@ -6,6 +6,14 @@ The project is intentionally separate from the InnAware UCP runtime. The emulato
 
 > **Development status:** 0.2.0 alpha. Protocol entries carry explicit maturity labels; `implemented` does not mean every vendor-specific edge case has been certified.
 
+## Platform targets
+
+**Windows is the primary technician/product target.** The normal end-user deployment is expected to be a Windows field laptop running a portable EXE or installed/signed desktop package with COM-port discovery, saved profiles, captures, scenarios and technician-oriented controls.
+
+**Linux is the primary headless engineering/laboratory target.** It uses the exact same core for protocol development, automated regression testing, long-running TCP/serial integration tests and systemd-hosted simulated PMS/call-accounting endpoints. The server3 deployment is intentionally headless and is not the target desktop user experience.
+
+Protocol adapters, property state, framing, checksums, state machines, retries, scenarios and capture logic must remain shared across platforms. Windows-specific polish must not fork protocol behavior. See `docs/ADR-001-SHARED-CROSS-PLATFORM-CORE.md` and `docs/WINDOWS_FIELD_EDITION.md`.
+
 ## What 0.2.0 adds
 
 - Persistent multi-property hotel state.
