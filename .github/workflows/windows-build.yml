@@ -4,14 +4,15 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'pyproject.toml'
-      - 'scripts/build-windows.ps1'
-      - '.github/workflows/windows-build.yml'
+    tags: ['v*']
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
   pull_request:
     branches: [main]
+
+permissions:
+  contents: write
 
 jobs:
   windows-build:
@@ -20,25 +21,62 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
-      - name: Build Windows field package
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build Windows field product
         shell: pwsh
         run: ./scripts/build-windows.ps1 -Python python
 
-      - name: Upload Windows executable, checksums and source
+      - name: Read application version
+        shell: pwsh
+        run: |
+          $version = python -c "import sys; sys.path.insert(0,'src'); import innaware_pms_emulator; print(innaware_pms_emulator.__version__)"
+          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload Windows product artifact
         uses: actions/upload-artifact@v4
         with:
-          name: innaware-pms-emulator-windows
+          name: innaware-pms-emulator-windows-${{ env.APP_VERSION }}
           path: |
             dist-windows/InnAware-PMS-Emulator.exe
+            dist-windows/InnAware-PMS-Emulator-Setup.exe
             dist-windows/README-WINDOWS.txt
             dist-windows/SHA256SUMS.txt
-            InnAware-PMS-Emulator-Windows.zip
-            InnAware-PMS-Emulator-Source.zip
+            InnAware-PMS-Emulator-Windows-${{ env.APP_VERSION }}.zip
+            InnAware-PMS-Emulator-Source-${{ env.APP_VERSION }}.zip
+            SHA256SUMS-WINDOWS-${{ env.APP_VERSION }}.txt
           if-no-files-found: error
           retention-days: 30
+
+      - name: Verify tag matches application version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ($tag -ne "v$env:APP_VERSION") {
+            throw "Release tag $tag does not match application version v$env:APP_VERSION"
+          }
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: InnAware PMS Emulator ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+          files: |
+            dist-windows/InnAware-PMS-Emulator-Setup.exe
+            dist-windows/InnAware-PMS-Emulator.exe
+            InnAware-PMS-Emulator-Windows-${{ env.APP_VERSION }}.zip
+            InnAware-PMS-Emulator-Source-${{ env.APP_VERSION }}.zip
+            SHA256SUMS-WINDOWS-${{ env.APP_VERSION }}.txt
