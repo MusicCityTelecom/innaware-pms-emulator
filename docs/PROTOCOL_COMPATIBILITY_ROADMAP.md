@@ -48,9 +48,9 @@ Historical profiles include FOSSE/FOSSE2, GALAXY/GALAXY2, RDP, COMTROL UHLL and 
 
 ### HOBIS / HOBIS-A / Holidex
 
-Current `HOBIS` support is the HOBIS-A-style compatibility foundation with transactional ENQ/ACK behavior and recommended STX/ETX/XOR-BCC record framing.
+`HOBIS`, `HOBIS_A`, and `HOLIDEX` now use a verified HOBIS-A 54-character fixed-field layout with transactional ENQ/ACK behavior and recommended STX/ETX/XOR-BCC record framing. The three names are compatibility aliases for the same currently verified byte layout; they are not a claim that every historical product using those labels was byte-identical.
 
-Historical deployments describe HOBIS-A as the most common costed-call record family and frequently refer to the interface as HOBIS/Holidex. Future aliases must make clear whether they are byte-identical compatibility names or materially different layouts.
+The formatter keeps InnForm XL separate rather than inheriting the InnForm-specific `001A TEL ...` representation. HOBIS-A uses the documented four-digit counter, `PST` property code, fixed extension/time/duration/cost/number positions, and final description/type field.
 
 ### HOBIS2
 
@@ -58,7 +58,7 @@ Verified requirement: HOBIS2 adjusts the normal HOBIS layout for **five-digit ex
 
 ### InnForm XL
 
-Current `INNFORM_XL` support uses the `TEL` property code and the same transaction engine. Continue testing fixed positions, duration representation, cost rounding and sequence behavior against independent fixtures.
+Current `INNFORM_XL` support uses the `TEL` property code and the same transaction engine. It intentionally remains a separate formatter from HOBIS-A because existing field-tested InnForm traffic uses the `001A TEL ...` family. Continue testing fixed positions, duration representation, cost rounding and sequence behavior against independent fixtures.
 
 ### MICROS call accounting
 
