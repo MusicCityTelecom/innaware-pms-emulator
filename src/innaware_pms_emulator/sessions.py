@@ -15,6 +15,9 @@ from .state import CallAccountingStateMachine, EngineAction, FiasStateMachine
 from .transactions import CallAccountingTransactionSender
 
 
+_TRANSACTIONAL_CA_PROTOCOLS = {"INNFORM_XL", "HOBIS", "HOBIS_A", "HOLIDEX"}
+
+
 @dataclass(slots=True)
 class CaptureRecord:
     timestamp: str
@@ -95,7 +98,7 @@ class InterfaceManager:
                 role=str(config.options.get("role", "pms")),
                 sync_records_provider=provider,
             )
-        if protocol in {"INNFORM_XL", "HOBIS"}:
+        if protocol in _TRANSACTIONAL_CA_PROTOCOLS:
             return CallAccountingStateMachine(
                 ack_type=str(config.options.get("ack_type", "ack")),
                 auto_ack=bool(config.options.get("auto_ack", True)),
@@ -216,8 +219,10 @@ class InterfaceManager:
         runtime = self.get(name)
         if runtime.config.purpose.value != "call_accounting":
             raise ValueError("Interface is not a call-accounting interface")
-        if runtime.config.protocol not in {"INNFORM_XL", "HOBIS"}:
-            raise ValueError("Transactional sender is currently supported for INNFORM_XL and HOBIS")
+        if runtime.config.protocol not in _TRANSACTIONAL_CA_PROTOCOLS:
+            raise ValueError(
+                "Transactional sender is currently supported for INNFORM_XL, HOBIS, HOBIS_A, and HOLIDEX"
+            )
         if runtime.config.transport is TransportMode.TCP_SERVER and len(runtime.clients) != 1:
             raise RuntimeError("Transactional TCP-server sending requires exactly one connected client")
 
