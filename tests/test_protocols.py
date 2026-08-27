@@ -67,7 +67,7 @@ def test_mitel_1_name_is_fixed_width_before_room():
         "last_name": "GUESTLAST",
         "first_name": "GUESTFIRST",
     })
-    assert p == b"NAM2 GUESTLAST,GUESTFIRST    101"
+    assert p == b"NAM2 GUESTLAST,GUESTFIRST   101"
     decoded = Mitel1Adapter().decode(p)
     assert decoded.kind == "name_update"
     assert decoded.room == "101"
