@@ -7,7 +7,7 @@
 
 #define AppName "InnAware PMS Emulator"
 #define AppExeName "InnAware-PMS-Emulator.exe"
-#define AppPublisher "InnAware"
+#define AppPublisher "Tommy Heggie"
 #define AppURL "https://github.com/MusicCityTelecom/innaware-pms-emulator"
 
 [Setup]
@@ -36,6 +36,7 @@ VersionInfoCompany={#AppPublisher}
 VersionInfoDescription={#AppName} Setup
 VersionInfoProductName={#AppName}
 VersionInfoProductVersion={#AppVersion}
+VersionInfoCopyright=Copyright (c) 2026 Tommy Heggie
 SetupLogging=yes
 
 [Files]
