@@ -12,6 +12,7 @@ $OldDataDir = $env:INNAWARE_PMS_DATA_DIR
 $env:INNAWARE_PMS_DATA_DIR = $TempData
 $Process = $null
 $LogPath = Join-Path $TempData "logs\emulator.log"
+$TaskKill = Join-Path $env:SystemRoot "System32\taskkill.exe"
 
 function Show-SmokeLog {
     if (Test-Path $LogPath) {
@@ -22,6 +23,52 @@ function Show-SmokeLog {
     }
     else {
         Write-Host "No frozen-EXE diagnostic log was created at $LogPath" -ForegroundColor Yellow
+    }
+}
+
+function Get-SmokeProcesses {
+    $Expected = [System.IO.Path]::GetFullPath($Exe)
+    try {
+        return @(Get-CimInstance Win32_Process -Filter "Name='InnAware-PMS-Emulator.exe'" -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.ExecutablePath -and
+                ([System.IO.Path]::GetFullPath($_.ExecutablePath) -ieq $Expected)
+            })
+    }
+    catch {
+        return @()
+    }
+}
+
+function Stop-SmokeProcessTree {
+    param([int]$RootPid)
+
+    if ($RootPid -gt 0 -and (Test-Path $TaskKill)) {
+        & $TaskKill /PID $RootPid /T /F 2>$null | Out-Null
+    }
+
+    # PyInstaller --onefile can use a bootloader parent and application child.
+    # If the parent has already disappeared, terminate any remaining process
+    # whose executable path is exactly the smoke-test EXE.
+    foreach ($Item in @(Get-SmokeProcesses)) {
+        if (Test-Path $TaskKill) {
+            & $TaskKill /PID $Item.ProcessId /T /F 2>$null | Out-Null
+        }
+        else {
+            Stop-Process -Id $Item.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    for ($i = 0; $i -lt 50; $i++) {
+        if (@(Get-SmokeProcesses).Count -eq 0) {
+            return
+        }
+        Start-Sleep -Milliseconds 100
+    }
+
+    $Remaining = @(Get-SmokeProcesses | ForEach-Object { $_.ProcessId })
+    if ($Remaining.Count -gt 0) {
+        Write-Warning "Frozen smoke-test process(es) still present after cleanup: $($Remaining -join ', ')"
     }
 }
 
@@ -91,9 +138,8 @@ catch {
     throw
 }
 finally {
-    if ($Process -and -not $Process.HasExited) {
-        Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
-        $Process.WaitForExit(5000) | Out-Null
+    if ($Process) {
+        Stop-SmokeProcessTree -RootPid $Process.Id
     }
     if ($null -eq $OldDataDir) {
         Remove-Item Env:INNAWARE_PMS_DATA_DIR -ErrorAction SilentlyContinue
