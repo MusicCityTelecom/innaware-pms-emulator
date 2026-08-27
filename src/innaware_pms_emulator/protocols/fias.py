@@ -1,4 +1,5 @@
 from typing import Any
+
 from .base import DecodedRecord
 
 
@@ -25,23 +26,28 @@ class FiasAdapter:
         body = "|".join([code] + [f"{key}{value}" for key, value in fields if value not in (None, "")])
         return (body + "|\r\n").encode("latin-1")
 
+    def _guest_name_fields(self, last: str, first: str) -> list[tuple[str, Any]]:
+        if self.hilton:
+            combined = last.strip()
+            if first.strip():
+                combined = f"{combined}, {first.strip()}" if combined else first.strip()
+            return [("GN", combined)]
+        fields: list[tuple[str, Any]] = [("GN", last)]
+        if first:
+            fields.append(("GF", first))
+        return fields
+
     def encode_event(self, event: dict[str, Any]) -> bytes:
         action = event["action"].lower()
         room = event.get("room", "")
         last = event.get("last_name", "")
         first = event.get("first_name", "")
         if action == "checkin":
-            fields = [("RN", room), ("GN", last)]
-            if first and not self.hilton:
-                fields.append(("GF", first))
-            return self._line("GI", *fields)
+            return self._line("GI", ("RN", room), *self._guest_name_fields(last, first))
         if action == "checkout":
             return self._line("GO", ("RN", room))
         if action in ("name", "name_update"):
-            fields = [("RN", room), ("GN", last)]
-            if first and not self.hilton:
-                fields.append(("GF", first))
-            return self._line("GC", *fields)
+            return self._line("GC", ("RN", room), *self._guest_name_fields(last, first))
         if action == "wakeup_set":
             return self._line("WR", ("RN", room), ("DA", event.get("wakeup_date")), ("TI", event.get("wakeup_time")))
         if action == "wakeup_cancel":
