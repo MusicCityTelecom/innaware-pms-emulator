@@ -16,7 +16,8 @@ htmlcov/
 *.log
 .DS_Store
 *.spec
-InnAware-PMS-Emulator-Windows.zip
-InnAware-PMS-Emulator-Source.zip
+InnAware-PMS-Emulator-Windows*.zip
+InnAware-PMS-Emulator-Source*.zip
+SHA256SUMS-WINDOWS-*.txt
 interfaces.json
 properties.json
