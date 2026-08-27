@@ -1,20 +1,33 @@
 # InnAware PMS Emulator - Windows Quick Start
 
+**Author:** Tommy Heggie  
+**Current field-beta version:** 0.3.0
+
 ## Install
 
-Preferred distribution:
+### Preferred distribution: installer
+
+When the release includes it:
 
 1. Download `InnAware-PMS-Emulator-Setup.exe` from the current GitHub release.
 2. Run the installer.
 3. Launch **InnAware PMS Emulator** from the Start Menu.
 
-Portable distribution:
+The installer defaults to a per-user installation under:
+
+```text
+%LOCALAPPDATA%\Programs\InnAware PMS Emulator
+```
+
+### Portable distribution
 
 1. Download `InnAware-PMS-Emulator-Windows-<version>.zip`.
 2. Extract it to a writable folder.
 3. Run `InnAware-PMS-Emulator.exe`.
 
 Python is not required to run either packaged distribution.
+
+If a development build was made without Inno Setup 6, the portable EXE/ZIP can still be complete and smoke-tested even though `Setup.exe` is absent.
 
 ## First launch
 
@@ -109,3 +122,7 @@ If TCP/8080 is already owned by another application, InnAware PMS Emulator will 
 ## Safety
 
 This is an interoperability/test instrument. It can send real PMS and call-accounting traffic. Do not point it at a production hotel PMS, billing endpoint, PBX, or customer system unless the test traffic is explicitly intended and authorized.
+
+---
+
+InnAware PMS Emulator was created and is maintained by **Tommy Heggie**.
