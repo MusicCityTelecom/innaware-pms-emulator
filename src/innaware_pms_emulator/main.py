@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import platform
 from contextlib import asynccontextmanager
@@ -16,15 +17,19 @@ from .operator_console import html as operator_html
 from .profiles import build_interface_from_profile, profile_catalog
 from .property_api import router as property_router
 from .property_state import property_manager
+from .protocol_packs import active_pack_stubs
 from .protocols.registry import REGISTRY, protocol_catalog
 from .sessions import manager
 from .storage import data_dir, store
 from .support import build_support_bundle, capture_export, safe_name
+from .update_console import html as update_html
+from .updates import UpdateError, update_manager
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await manager.restore(store.load())
+    update_manager.start_background_check(__version__)
     try:
         yield
     finally:
@@ -50,6 +55,12 @@ class ProfileInstantiateRequest(BaseModel):
     property_id: str | None = None
     enabled: bool = True
     overrides: dict = Field(default_factory=dict)
+
+
+class UpdateSettingsRequest(BaseModel):
+    check_app_updates_on_start: bool = True
+    check_protocol_updates_on_start: bool = True
+    include_prereleases: bool = True
 
 
 def _interface_or_404(name: str):
@@ -145,6 +156,55 @@ async def instantiate_profile(profile_id: str, request: ProfileInstantiateReques
 @app.get("/api/v1/serial-ports")
 def serial_ports():
     return {"ports": _serial_port_catalog()}
+
+
+@app.get("/api/v1/protocol-packs/stubs")
+def protocol_pack_stubs():
+    return {"stubs": active_pack_stubs()}
+
+
+@app.get("/api/v1/updates/status")
+def update_status():
+    return update_manager.load_status()
+
+
+@app.get("/api/v1/updates/settings")
+def update_settings():
+    return update_manager.load_settings()
+
+
+@app.put("/api/v1/updates/settings")
+def save_update_settings(request: UpdateSettingsRequest):
+    return update_manager.save_settings(request.model_dump())
+
+
+@app.post("/api/v1/updates/check")
+async def check_updates():
+    return await asyncio.to_thread(update_manager.check, __version__)
+
+
+@app.post("/api/v1/updates/app/download")
+async def download_app_update():
+    try:
+        return await asyncio.to_thread(update_manager.download_app_update, __version__)
+    except UpdateError as exc:
+        raise HTTPException(409, str(exc))
+
+
+@app.post("/api/v1/updates/app/launch")
+async def launch_app_update():
+    try:
+        return await asyncio.to_thread(update_manager.launch_downloaded_app_update)
+    except UpdateError as exc:
+        raise HTTPException(409, str(exc))
+
+
+@app.post("/api/v1/updates/protocol-pack/install")
+async def install_protocol_pack():
+    try:
+        return await asyncio.to_thread(update_manager.install_latest_protocol_pack)
+    except UpdateError as exc:
+        raise HTTPException(409, str(exc))
 
 
 @app.post("/api/v1/protocols/{protocol}/guest-event")
@@ -361,9 +421,18 @@ async def send_call_record_transaction(name: str, call: CallRecord):
     return {"protocol": runtime.config.protocol, "hex": payload.hex(" "), "transaction": result}
 
 
+@app.get("/updates", response_class=HTMLResponse)
+def updates_page():
+    return update_html()
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return operator_html()
+    page = operator_html()
+    marker = '<span id="health"'
+    if marker in page:
+        page = page.replace(marker, '<button onclick="location.href=\'/updates\'">Updates</button> <span id="health"', 1)
+    return page
 
 
 def run():
