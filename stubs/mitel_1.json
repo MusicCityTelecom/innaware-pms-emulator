@@ -4,7 +4,7 @@
   "records": {
     "checkin": "CHK1  101",
     "checkout": "CHK0  101",
-    "name_replace": "NAM2 GUESTLAST,GUESTFIRST    101",
+    "name_replace": "NAM2 GUESTLAST,GUESTFIRST   101",
     "wakeup_set": "WKP0630  101",
     "restriction": "RST2  101"
   }
