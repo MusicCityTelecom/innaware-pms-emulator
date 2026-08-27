@@ -30,7 +30,7 @@ def test_fias_room_move_uses_old_and_new_room_fields():
     })
     assert p == b"GC|RN204|RO101|GNSmith|GFJohn|\r\n"
     decoded = FiasAdapter().decode(p)
-    assert decoded.event_type == "room_move"
+    assert decoded.kind == "room_move"
     assert decoded.room == "204"
     assert decoded.fields["RO"] == "101"
 
