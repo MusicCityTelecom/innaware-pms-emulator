@@ -11,6 +11,19 @@ New-Item -ItemType Directory -Force -Path $TempData | Out-Null
 $OldDataDir = $env:INNAWARE_PMS_DATA_DIR
 $env:INNAWARE_PMS_DATA_DIR = $TempData
 $Process = $null
+$LogPath = Join-Path $TempData "logs\emulator.log"
+
+function Show-SmokeLog {
+    if (Test-Path $LogPath) {
+        Write-Host "" 
+        Write-Host "===== FROZEN EXE DIAGNOSTIC LOG =====" -ForegroundColor Yellow
+        Get-Content -Path $LogPath -Tail 120 -ErrorAction SilentlyContinue
+        Write-Host "===== END DIAGNOSTIC LOG =====" -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "No frozen-EXE diagnostic log was created at $LogPath" -ForegroundColor Yellow
+    }
+}
 
 try {
     Write-Host "Starting frozen EXE smoke test on 127.0.0.1:$Port" -ForegroundColor Cyan
@@ -59,6 +72,10 @@ try {
     if ((Get-Item $bundlePath).Length -lt 100) { throw "Support bundle from frozen build is unexpectedly small." }
 
     Write-Host "Frozen EXE smoke test PASS" -ForegroundColor Green
+}
+catch {
+    Show-SmokeLog
+    throw
 }
 finally {
     if ($Process -and -not $Process.HasExited) {
