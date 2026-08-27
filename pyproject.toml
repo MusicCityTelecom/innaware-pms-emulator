@@ -5,12 +5,25 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "innaware-pms-emulator"
 version = "0.3.0"
-description = "Cross-platform hotel PMS and call-accounting integration emulator"
+description = "Windows-first, cross-platform hotel PMS and call-accounting integration emulator"
 readme = "README.md"
 requires-python = ">=3.11"
+authors = [
+  { name = "Tommy Heggie" },
+]
+keywords = [
+  "hospitality",
+  "pms",
+  "pbx",
+  "fias",
+  "call-accounting",
+  "smdr",
+  "telephony",
+  "emulator",
+]
 classifiers = [
   "Development Status :: 3 - Alpha",
-  "Environment :: Console",
+  "Environment :: Win32 (MS Windows)",
   "Framework :: FastAPI",
   "Operating System :: Microsoft :: Windows",
   "Operating System :: POSIX :: Linux",
@@ -31,6 +44,12 @@ dependencies = [
 windows = [
   "pywebview>=5.4,<7",
 ]
+
+[project.urls]
+Homepage = "https://github.com/MusicCityTelecom/innaware-pms-emulator"
+Repository = "https://github.com/MusicCityTelecom/innaware-pms-emulator"
+Documentation = "https://github.com/MusicCityTelecom/innaware-pms-emulator#readme"
+Issues = "https://github.com/MusicCityTelecom/innaware-pms-emulator/issues"
 
 [project.scripts]
 innaware-pms-emulator = "innaware_pms_emulator.main:run"
