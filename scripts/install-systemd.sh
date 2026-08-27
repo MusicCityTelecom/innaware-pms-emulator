@@ -32,7 +32,7 @@ done
 }
 
 if ! id "$SERVICE_USER" >/dev/null 2>&1; then
-    useradd --system --home-dir "$DATA_DIR" --create-home --shell /usr/sbin/nologin "$SERVICE_USER"
+    useradd --system --home-dir "$DATA_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"
 fi
 
 if getent group dialout >/dev/null 2>&1; then
