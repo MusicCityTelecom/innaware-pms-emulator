@@ -1,6 +1,7 @@
 from enum import Enum
-from pydantic import BaseModel, Field
 from typing import Any
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class InterfacePurpose(str, Enum):
@@ -20,17 +21,48 @@ class InterfaceConfig(BaseModel):
     purpose: InterfacePurpose
     protocol: str
     transport: TransportMode
+    property_id: str | None = Field(default=None, max_length=80)
     enabled: bool = True
     bind_host: str = "0.0.0.0"
     host: str | None = None
     port: int | None = Field(default=None, ge=1, le=65535)
     serial_device: str | None = None
-    baud_rate: int = 9600
+    baud_rate: int = Field(default=9600, ge=50, le=4_000_000)
     data_bits: int = 8
     parity: str = "N"
-    stop_bits: int = 1
+    stop_bits: float = 1
     flow_control: str = "none"
     options: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("data_bits")
+    @classmethod
+    def validate_data_bits(cls, value: int) -> int:
+        if value not in {5, 6, 7, 8}:
+            raise ValueError("data_bits must be 5, 6, 7, or 8")
+        return value
+
+    @field_validator("parity")
+    @classmethod
+    def validate_parity(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if normalized not in {"N", "E", "O", "M", "S"}:
+            raise ValueError("parity must be N, E, O, M, or S")
+        return normalized
+
+    @field_validator("stop_bits")
+    @classmethod
+    def validate_stop_bits(cls, value: float) -> float:
+        if value not in {1, 1.5, 2}:
+            raise ValueError("stop_bits must be 1, 1.5, or 2")
+        return value
+
+    @field_validator("flow_control")
+    @classmethod
+    def validate_flow_control(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"none", "rtscts", "xonxoff"}:
+            raise ValueError("flow_control must be none, rtscts, or xonxoff")
+        return normalized
 
 
 class GuestEvent(BaseModel):
