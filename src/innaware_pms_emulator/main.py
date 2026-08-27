@@ -5,10 +5,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+from serial.tools import list_ports
 
 from . import __version__
 from .models import CallRecord, GuestEvent, InterfaceConfig
 from .operator_console import html as operator_html
+from .property_api import router as property_router
+from .property_state import property_manager
 from .protocols.registry import REGISTRY, protocol_catalog
 from .sessions import manager
 from .storage import store
@@ -17,10 +20,14 @@ from .storage import store
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await manager.restore(store.load())
-    yield
+    try:
+        yield
+    finally:
+        await manager.shutdown()
 
 
 app = FastAPI(title="InnAware PMS Emulator", version=__version__, lifespan=lifespan)
+app.include_router(property_router)
 
 
 class RawSendRequest(BaseModel):
@@ -60,12 +67,34 @@ def _bytes_from_request(request: RawSendRequest) -> bytes:
 
 @app.get("/api/v1/health")
 def health():
-    return {"status": "ok", "version": __version__, "interfaces": len(manager.list())}
+    return {
+        "status": "ok",
+        "version": __version__,
+        "interfaces": len(manager.list()),
+        "properties": len(property_manager.list()),
+    }
 
 
 @app.get("/api/v1/protocols")
 def protocols():
     return {"protocols": protocol_catalog()}
+
+
+@app.get("/api/v1/serial-ports")
+def serial_ports():
+    return {
+        "ports": [
+            {
+                "device": item.device,
+                "description": item.description,
+                "hwid": item.hwid,
+                "manufacturer": item.manufacturer,
+                "product": item.product,
+                "serial_number": item.serial_number,
+            }
+            for item in list_ports.comports()
+        ]
+    }
 
 
 @app.post("/api/v1/protocols/{protocol}/guest-event")
@@ -101,6 +130,11 @@ async def create_interface(config: InterfaceConfig):
         raise HTTPException(400, f"Protocol '{config.protocol}' is not implemented")
     if adapter.purpose != config.purpose.value:
         raise HTTPException(400, f"Protocol '{config.protocol}' is not a {config.purpose.value} protocol")
+    if config.property_id:
+        try:
+            property_manager.get(config.property_id)
+        except KeyError:
+            raise HTTPException(400, f"Property '{config.property_id}' does not exist")
     config.protocol = config.protocol.upper()
     try:
         runtime = await manager.create(config)
@@ -232,4 +266,5 @@ def index():
 
 def run():
     import uvicorn
+
     uvicorn.run("innaware_pms_emulator.main:app", host="127.0.0.1", port=8080)
