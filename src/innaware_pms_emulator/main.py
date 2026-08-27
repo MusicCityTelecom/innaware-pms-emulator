@@ -1,20 +1,25 @@
 from __future__ import annotations
 
+import io
+import platform
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
+from pydantic import BaseModel, Field
 from serial.tools import list_ports
 
 from . import __version__
 from .models import CallRecord, GuestEvent, InterfaceConfig
 from .operator_console import html as operator_html
+from .profiles import build_interface_from_profile, profile_catalog
 from .property_api import router as property_router
 from .property_state import property_manager
 from .protocols.registry import REGISTRY, protocol_catalog
 from .sessions import manager
-from .storage import store
+from .storage import data_dir, store
+from .support import build_support_bundle, capture_export, safe_name
 
 
 @asynccontextmanager
@@ -38,6 +43,13 @@ class RawSendRequest(BaseModel):
 
 class ControlRequest(BaseModel):
     control: str
+
+
+class ProfileInstantiateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    property_id: str | None = None
+    enabled: bool = True
+    overrides: dict = Field(default_factory=dict)
 
 
 def _interface_or_404(name: str):
@@ -65,6 +77,20 @@ def _bytes_from_request(request: RawSendRequest) -> bytes:
     raise HTTPException(400, "Supply either text or hex")
 
 
+def _serial_port_catalog() -> list[dict]:
+    return [
+        {
+            "device": item.device,
+            "description": item.description,
+            "hwid": item.hwid,
+            "manufacturer": item.manufacturer,
+            "product": item.product,
+            "serial_number": item.serial_number,
+        }
+        for item in list_ports.comports()
+    ]
+
+
 @app.get("/api/v1/health")
 def health():
     return {
@@ -75,26 +101,50 @@ def health():
     }
 
 
+@app.get("/api/v1/app-info")
+def app_info():
+    return {
+        "product": "InnAware PMS Emulator",
+        "version": __version__,
+        "platform": platform.system(),
+        "platform_release": platform.release(),
+        "machine": platform.machine(),
+        "data_dir": str(data_dir()),
+        "primary_field_target": "Windows",
+        "linux_role": "headless development and interoperability lab",
+    }
+
+
 @app.get("/api/v1/protocols")
 def protocols():
     return {"protocols": protocol_catalog()}
 
 
+@app.get("/api/v1/profiles")
+def profiles():
+    return {"profiles": profile_catalog()}
+
+
+@app.post("/api/v1/profiles/{profile_id}/instantiate", status_code=201)
+async def instantiate_profile(profile_id: str, request: ProfileInstantiateRequest):
+    try:
+        config = build_interface_from_profile(
+            profile_id,
+            name=request.name,
+            property_id=request.property_id,
+            enabled=request.enabled,
+            overrides=request.overrides,
+        )
+    except KeyError:
+        raise HTTPException(404, f"Profile '{profile_id}' not found")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return await create_interface(config)
+
+
 @app.get("/api/v1/serial-ports")
 def serial_ports():
-    return {
-        "ports": [
-            {
-                "device": item.device,
-                "description": item.description,
-                "hwid": item.hwid,
-                "manufacturer": item.manufacturer,
-                "product": item.product,
-                "serial_number": item.serial_number,
-            }
-            for item in list_ports.comports()
-        ]
-    }
+    return {"ports": _serial_port_catalog()}
 
 
 @app.post("/api/v1/protocols/{protocol}/guest-event")
@@ -184,10 +234,54 @@ def interface_captures(name: str, limit: int = 200):
     return {"captures": manager.captures(name, limit)}
 
 
+@app.get("/api/v1/interfaces/{name}/captures/export")
+def interface_capture_export(name: str, format: str = "csv", limit: int = 2000):
+    _interface_or_404(name)
+    try:
+        content, media_type, extension = capture_export(manager.captures(name, limit), format)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    filename = f"{safe_name(name)}-capture.{extension}"
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.get("/api/v1/interfaces/{name}/transactions")
 def interface_transactions(name: str, limit: int = 100):
     _interface_or_404(name)
     return {"transactions": manager.transactions(name, limit)}
+
+
+@app.get("/api/v1/support-bundle")
+def support_bundle(include_property_state: bool = False):
+    statuses = manager.list()
+    configs = [config.model_dump(mode="json") for config in manager.configs()]
+    property_summaries = property_manager.list()
+    captures = {item["name"]: manager.captures(item["name"], 2000) for item in statuses}
+    transactions = {item["name"]: manager.transactions(item["name"], 200) for item in statuses}
+    full_state = None
+    if include_property_state:
+        full_state = [property_manager.get(item["id"]).model_dump(mode="json") for item in property_summaries]
+    content = build_support_bundle(
+        interface_statuses=statuses,
+        interface_configs=configs,
+        property_summaries=property_summaries,
+        protocol_catalog=protocol_catalog(),
+        serial_ports=_serial_port_catalog(),
+        captures_by_interface=captures,
+        transactions_by_interface=transactions,
+        full_property_state=full_state,
+    )
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
+    filename = f"InnAware-PMS-Emulator-Support-{stamp}.zip"
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.post("/api/v1/interfaces/{name}/send/raw")
