@@ -19,7 +19,7 @@ The project is intentionally separate from the InnAware UCP runtime. The emulato
 - FIAS database resync (`DR`) generated from actual active stays (`DS -> GI... -> DE`).
 - Cross-platform browser operator console with a room board.
 - Automatic serial-port discovery (`COMx` on Windows, tty devices on Linux when exposed by the OS).
-- Windows one-file EXE build and GitHub Actions artifact.
+- Windows one-file EXE build and GitHub Actions artifact workflow.
 - Hardened Debian systemd service template.
 
 ## Architecture
@@ -64,13 +64,17 @@ Guest identity and stay/occupancy are separate objects. A room continues to exis
 | ONQ | PMS | encoder | Legacy message-generation foundation; session behavior still expanding |
 | CHOICE_ADVANTAGE | PMS | encoder | Legacy message-generation foundation |
 | OPERA_LEGACY | PMS | encoder | Legacy Opera-style foundation; FIAS is used for FIAS-family testing |
-| INNFORM_XL | Call accounting | transactional | Fixed-field records; optional ENQ/ACK transaction mode |
-| HOBIS | Call accounting | transactional | ENQ/ACK then STX/record/ETX/XOR-BCC and ACK |
+| INNFORM_XL | Call accounting | transactional | Field-tested InnForm XL/TEL-family record plus ENQ/ACK transaction mode |
+| HOBIS | Call accounting | transactional | Verified 54-character HOBIS-A fixed layout; ENQ/ACK then STX/record/ETX/XOR-BCC and ACK |
+| HOBIS_A | Call accounting | transactional | Explicit compatibility name for the verified HOBIS-A layout |
+| HOLIDEX | Call accounting | transactional | HOBIS/Holidex compatibility alias using the verified HOBIS-A transaction family |
 | BLIND_SMDR | Call accounting | encoder | Line-oriented blind-send output |
 | HOTELKEY | PMS | planned | HTTP/JSON transport work remains pending |
-| HOBIC / HOBIS_A / HOBIS_B / HOLIDEX / RAW_SMDR | Call accounting | planned | Reserved for verified implementations |
+| HOBIC / HOBIS2 / HOBIS_B / MICROS_CA / ROOMKEY / PROFITWATCH / RAW_SMDR | Call accounting | planned | Requirements identified; exact byte fixtures still required before claiming implementation |
 
 The API exposes the same maturity information at `GET /api/v1/protocols`.
+
+The compatibility requirements and historical edge cases being tracked are documented in `docs/PROTOCOL_COMPATIBILITY_ROADMAP.md`.
 
 ## Supported transports
 
@@ -91,7 +95,7 @@ The call-accounting transaction engine supports:
 ENQ -> wait ACK -> send record -> wait ACK
 ```
 
-with timeout, NAK detection and retry limits. HOBIS recommends STX/ETX+BCC for the record stage. Transactional TCP-server sending requires exactly one connected client so an ACK cannot be ambiguously attributed to the wrong peer.
+with timeout, NAK detection and retry limits. HOBIS/HOBIS-A/Holidex recommend STX/ETX+BCC for the record stage. Transactional TCP-server sending requires exactly one connected client so an ACK cannot be ambiguously attributed to the wrong peer.
 
 ## Quick development start
 
@@ -108,11 +112,22 @@ Open `http://127.0.0.1:8080/`.
 
 For an isolated lab server where remote browser access is intentional, bind to the lab address or `0.0.0.0`. Do not expose the management API to an untrusted/customer network.
 
+## Server3 deterministic verification
+
+The repository contains a self-contained verification gate that uses an isolated temporary data directory and port 18080, so it will not touch configured PMS/call-accounting interfaces:
+
+```bash
+cd /opt/innaware/innaware-pms-emulator
+bash scripts/verify-server3.sh
+```
+
+It runs compile checks, pytest, an isolated API smoke test, property scenario checks, a Hilton combined-name fixture, and creates a source ZIP under `/tmp` with a SHA-256 hash.
+
 ## Server3 / Debian systemd installation
 
 The repository includes `packaging/systemd/innaware-pms-emulator.service` and `scripts/install-systemd.sh`.
 
-After tests pass:
+After tests pass and any manually launched copy on port 8080 has been stopped:
 
 ```bash
 cd /opt/innaware/innaware-pms-emulator
@@ -136,7 +151,7 @@ journalctl -u innaware-pms-emulator.service -n 100 --no-pager
 
 ## Windows field edition
 
-The Windows edition uses the exact same Python core and operator console.
+The Windows edition uses the exact same Python core and operator console. The architectural decision to keep one protocol engine is documented in `docs/ADR-001-SHARED-CROSS-PLATFORM-CORE.md`.
 
 ### Build locally
 
@@ -166,9 +181,9 @@ InnAware-PMS-Emulator-Source.zip
 
 ### GitHub Actions build
 
-Every relevant push to `main` triggers the **Windows Build** workflow. Its `innaware-pms-emulator-windows` artifact contains the EXE, field ZIP, source ZIP, README and SHA-256 file.
+The repository contains a **Windows Build** workflow which will create the same artifacts on a Windows hosted runner. A separate **Test** workflow covers Ubuntu and Windows with Python 3.11 and 3.13.
 
-The general **Test** workflow runs the shared core on both Linux and Windows using Python 3.11 and 3.13.
+At the time of the 0.2.0 consolidation, GitHub was terminating the private-repository jobs before assigning a runner (no steps executed). Do not treat those failed run badges as test failures; run the deterministic server3 gate and/or local Windows builder until GitHub runner provisioning is restored.
 
 ## Persistent data
 
