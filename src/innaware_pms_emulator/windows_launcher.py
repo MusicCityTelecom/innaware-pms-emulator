@@ -38,6 +38,65 @@ def _log_path() -> Path:
     return path / "emulator.log"
 
 
+def _server_log_config(log_level: str) -> dict[str, Any]:
+    """Return a file-only logging configuration safe for pythonw/PyInstaller.
+
+    A PyInstaller ``--windowed`` executable intentionally has no console, so
+    ``sys.stdout`` and ``sys.stderr`` can both be ``None``. Uvicorn's default
+    formatter probes ``sys.stdout.isatty()`` to decide whether to use colors,
+    which crashes a frozen GUI executable before the API can start. Keeping the
+    server log entirely file-backed also gives field technicians a persistent
+    diagnostic trail under the application's data directory.
+    """
+
+    levels = {
+        "trace": 5,
+        "debug": 10,
+        "info": 20,
+        "warning": 30,
+        "error": 40,
+        "critical": 50,
+    }
+    level = levels.get(log_level.lower(), 20)
+    return {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "file": {
+                "format": "%(asctime)s %(levelname)s %(name)s: %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            }
+        },
+        "handlers": {
+            "file": {
+                "class": "logging.FileHandler",
+                "formatter": "file",
+                "filename": str(_log_path()),
+                "encoding": "utf-8",
+            }
+        },
+        "loggers": {
+            "uvicorn": {
+                "handlers": ["file"],
+                "level": level,
+                "propagate": False,
+            },
+            "uvicorn.error": {
+                "level": level,
+            },
+            "uvicorn.access": {
+                "handlers": ["file"],
+                "level": level,
+                "propagate": False,
+            },
+        },
+        "root": {
+            "handlers": ["file"],
+            "level": level,
+        },
+    }
+
+
 def _port_open(host: str, port: int) -> bool:
     probe_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
     try:
@@ -70,7 +129,8 @@ def _show_error(message: str) -> None:
             return
         except Exception:
             pass
-    print(message, file=sys.stderr)
+    if sys.stderr is not None:
+        print(message, file=sys.stderr)
 
 
 def _server_command(host: str, port: int, log_level: str) -> list[str]:
@@ -151,6 +211,7 @@ def _run_server_only(host: str, port: int, log_level: str) -> None:
         host=host,
         port=port,
         log_level=log_level,
+        log_config=_server_log_config(log_level),
     )
 
 
