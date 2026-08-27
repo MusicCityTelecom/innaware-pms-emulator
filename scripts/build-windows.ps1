@@ -10,6 +10,87 @@ $ProgressPreference = "SilentlyContinue"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
 
+$OutputPath = if ([System.IO.Path]::IsPathRooted($OutputDir)) {
+    [System.IO.Path]::GetFullPath($OutputDir)
+}
+else {
+    [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
+}
+$PreviousExe = Join-Path $OutputPath "InnAware-PMS-Emulator.exe"
+$TaskKill = Join-Path $env:SystemRoot "System32\taskkill.exe"
+
+function Get-OutputExeProcesses {
+    param([string]$ExePath)
+
+    if (-not $ExePath) { return @() }
+    $Expected = [System.IO.Path]::GetFullPath($ExePath)
+    try {
+        return @(Get-CimInstance Win32_Process -Filter "Name='InnAware-PMS-Emulator.exe'" -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.ExecutablePath -and
+                ([System.IO.Path]::GetFullPath($_.ExecutablePath) -ieq $Expected)
+            })
+    }
+    catch {
+        return @()
+    }
+}
+
+function Stop-OutputExeProcesses {
+    param([string]$ExePath)
+
+    $Matches = @(Get-OutputExeProcesses -ExePath $ExePath)
+    if ($Matches.Count -eq 0) { return }
+
+    Write-Host "Stopping prior InnAware PMS Emulator process tree(s) from build output..." -ForegroundColor Yellow
+    foreach ($Item in $Matches) {
+        Write-Host "  PID $($Item.ProcessId): $($Item.ExecutablePath)" -ForegroundColor DarkGray
+        if (Test-Path $TaskKill) {
+            & $TaskKill /PID $Item.ProcessId /T /F 2>$null | Out-Null
+        }
+        else {
+            Stop-Process -Id $Item.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    for ($i = 0; $i -lt 50; $i++) {
+        if (@(Get-OutputExeProcesses -ExePath $ExePath).Count -eq 0) { return }
+        Start-Sleep -Milliseconds 100
+    }
+}
+
+function Remove-BuildOutputDirectory {
+    param([string]$Path, [string]$ExePath)
+
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+
+    Stop-OutputExeProcesses -ExePath $ExePath
+
+    $LastError = $null
+    for ($Attempt = 1; $Attempt -le 40; $Attempt++) {
+        try {
+            Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+            return
+        }
+        catch {
+            $LastError = $_
+            if ($Attempt -eq 1) {
+                Write-Host "Build output is temporarily locked; waiting for Windows to release file handles..." -ForegroundColor Yellow
+            }
+            Start-Sleep -Milliseconds 250
+            Stop-OutputExeProcesses -ExePath $ExePath
+        }
+    }
+
+    $Remaining = @(Get-OutputExeProcesses -ExePath $ExePath)
+    if ($Remaining.Count -gt 0) {
+        $Pids = @($Remaining | ForEach-Object { $_.ProcessId }) -join ", "
+        throw "Unable to clean '$Path'. InnAware-PMS-Emulator.exe is still running from that directory (PID(s): $Pids). Close the application and retry. Last error: $($LastError.Exception.Message)"
+    }
+
+    throw "Unable to clean '$Path' after 10 seconds. Windows still has a file handle open (often antivirus/indexing immediately after a new EXE is run). Retry once the handle is released. Last error: $($LastError.Exception.Message)"
+}
+
 $Venv = Join-Path $RepoRoot ".venv-winbuild"
 if (-not (Test-Path $Venv)) {
     if ($Python -eq "py") {
@@ -36,8 +117,8 @@ Write-Host "Building InnAware PMS Emulator $Version" -ForegroundColor Cyan
 & $Py -m pytest -q
 if ($LASTEXITCODE -ne 0) { throw "Regression tests failed; refusing to package Windows executable." }
 
-if (Test-Path $OutputDir) { Remove-Item -Recurse -Force $OutputDir }
-New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+Remove-BuildOutputDirectory -Path $OutputPath -ExePath $PreviousExe
+New-Item -ItemType Directory -Force -Path $OutputPath | Out-Null
 
 $VersionParts = @($Version.Split('.'))
 while ($VersionParts.Count -lt 4) { $VersionParts += '0' }
@@ -86,15 +167,23 @@ VSVersionInfo(
     --collect-all serial_asyncio `
     --collect-all webview `
     --hidden-import webview.platforms.edgechromium `
-    --distpath $OutputDir `
+    --distpath $OutputPath `
     src\innaware_pms_emulator\windows_launcher.py
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
 
-$Exe = Join-Path $OutputDir "InnAware-PMS-Emulator.exe"
+$Exe = Join-Path $OutputPath "InnAware-PMS-Emulator.exe"
 if (-not (Test-Path $Exe)) { throw "Windows executable was not produced: $Exe" }
 
 $SmokeScript = Join-Path $PSScriptRoot "smoke-windows.ps1"
 & $SmokeScript -Exe $Exe
+
+# The one-file PyInstaller bootloader uses a parent/child process model. The
+# smoke script terminates its tree; this additional wait protects subsequent
+# packaging from short-lived image/AV/indexer handles on the just-run EXE.
+for ($i = 0; $i -lt 20; $i++) {
+    if (@(Get-OutputExeProcesses -ExePath $Exe).Count -eq 0) { break }
+    Start-Sleep -Milliseconds 100
+}
 
 $Readme = @"
 InnAware PMS Emulator $Version - Windows Field Build
@@ -136,11 +225,11 @@ Normal field use should keep the management interface on 127.0.0.1.
 
 This software is a test/emulation instrument. Do not connect it to a production PMS or billing endpoint unless test traffic is explicitly intended and authorized.
 "@
-Set-Content -Path (Join-Path $OutputDir "README-WINDOWS.txt") -Value $Readme -Encoding utf8
+Set-Content -Path (Join-Path $OutputPath "README-WINDOWS.txt") -Value $Readme -Encoding utf8
 
 $ExeHash = Get-FileHash -Algorithm SHA256 $Exe
 $HashLines = @("$($ExeHash.Hash.ToLower())  InnAware-PMS-Emulator.exe")
-Set-Content -Path (Join-Path $OutputDir "SHA256SUMS.txt") -Value $HashLines -Encoding ascii
+Set-Content -Path (Join-Path $OutputPath "SHA256SUMS.txt") -Value $HashLines -Encoding ascii
 
 $Installer = $null
 $InstallerHash = $null
@@ -155,14 +244,13 @@ if (-not $SkipInstaller) {
     if ($IsccCandidates.Count -gt 0) {
         $Iscc = $IsccCandidates[0]
         $Iss = Join-Path $RepoRoot "packaging\windows\InnAware-PMS-Emulator.iss"
-        $ResolvedOutput = (Resolve-Path $OutputDir).Path
-        & $Iscc "/DAppVersion=$Version" "/DSourceDir=$ResolvedOutput" $Iss
+        & $Iscc "/DAppVersion=$Version" "/DSourceDir=$OutputPath" $Iss
         if ($LASTEXITCODE -ne 0) { throw "Inno Setup build failed" }
-        $Installer = Join-Path $OutputDir "InnAware-PMS-Emulator-Setup.exe"
+        $Installer = Join-Path $OutputPath "InnAware-PMS-Emulator-Setup.exe"
         if (-not (Test-Path $Installer)) { throw "Installer build completed but Setup.exe was not found" }
         $InstallerHash = Get-FileHash -Algorithm SHA256 $Installer
         $HashLines += "$($InstallerHash.Hash.ToLower())  InnAware-PMS-Emulator-Setup.exe"
-        Set-Content -Path (Join-Path $OutputDir "SHA256SUMS.txt") -Value $HashLines -Encoding ascii
+        Set-Content -Path (Join-Path $OutputPath "SHA256SUMS.txt") -Value $HashLines -Encoding ascii
     }
     else {
         Write-Warning "Inno Setup 6 was not found. Portable EXE/ZIP will be built; install Inno Setup 6 to also produce Setup.exe."
@@ -173,8 +261,8 @@ $Zip = Join-Path $RepoRoot "InnAware-PMS-Emulator-Windows-$Version.zip"
 if (Test-Path $Zip) { Remove-Item -Force $Zip }
 $PortableFiles = @(
     $Exe,
-    (Join-Path $OutputDir "README-WINDOWS.txt"),
-    (Join-Path $OutputDir "SHA256SUMS.txt")
+    (Join-Path $OutputPath "README-WINDOWS.txt"),
+    (Join-Path $OutputPath "SHA256SUMS.txt")
 )
 Compress-Archive -Path $PortableFiles -DestinationPath $Zip
 
