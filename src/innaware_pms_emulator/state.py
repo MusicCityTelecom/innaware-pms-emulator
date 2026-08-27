@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -22,12 +23,19 @@ class EngineAction:
 class FiasStateMachine:
     role: str = "pms"
     state: str = "down"
+    sync_records_provider: Callable[[], list[bytes]] | None = None
+    last_sync_count: int = 0
     buffer: bytearray = field(default_factory=bytearray)
     current_frame: bytearray = field(default_factory=bytearray)
     in_frame: bool = False
 
-    def status(self) -> dict[str, str]:
-        return {"engine": "fias", "role": self.role, "link_state": self.state}
+    def status(self) -> dict[str, str | int]:
+        return {
+            "engine": "fias",
+            "role": self.role,
+            "link_state": self.state,
+            "last_sync_count": self.last_sync_count,
+        }
 
     def feed(self, data: bytes) -> list[EngineAction]:
         actions: list[EngineAction] = []
@@ -100,10 +108,12 @@ class FiasStateMachine:
                 "FIAS posting answer",
             )]
         elif rt == "DR" and self.role.lower() == "pms":
-            return [
-                EngineAction(f"DS|DA{d}|TI{t}|".encode(), "FIAS database sync start"),
-                EngineAction(f"DE|DA{d}|TI{t}|".encode(), "FIAS database sync end"),
-            ]
+            sync_records = self.sync_records_provider() if self.sync_records_provider else []
+            self.last_sync_count = len(sync_records)
+            actions = [EngineAction(f"DS|DA{d}|TI{t}|".encode(), "FIAS database sync start")]
+            actions.extend(EngineAction(payload, "FIAS database sync guest") for payload in sync_records)
+            actions.append(EngineAction(f"DE|DA{d}|TI{t}|".encode(), "FIAS database sync end"))
+            return actions
         return []
 
     @staticmethod
@@ -144,8 +154,6 @@ class CallAccountingStateMachine:
         if not self.auto_ack:
             return actions
 
-        # Do not ACK bare ACK/NAK control responses. Any actual framed or line-oriented
-        # payload is treated as a received call record and acknowledged.
         controls_only = all(b in {ACK, NAK, ENQ, 0x0D, 0x0A} for b in data)
         has_record = (STX in data and ETX in data) or (
             not controls_only and (b"\n" in data or b"\r" in data)
