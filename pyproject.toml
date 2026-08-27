@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "innaware-pms-emulator"
-version = "0.2.0"
+version = "0.3.0"
 description = "Cross-platform hotel PMS and call-accounting integration emulator"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -27,8 +27,14 @@ dependencies = [
   "pydantic>=2.7,<3",
 ]
 
+[project.optional-dependencies]
+windows = [
+  "pywebview>=5.4,<7",
+]
+
 [project.scripts]
 innaware-pms-emulator = "innaware_pms_emulator.main:run"
+innaware-pms-emulator-windows = "innaware_pms_emulator.windows_launcher:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
