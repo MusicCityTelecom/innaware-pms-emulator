@@ -180,6 +180,17 @@ class UpdateManager:
                 return asset
         return None
 
+    @staticmethod
+    def _protocol_pack_version(asset: dict[str, Any]) -> str | None:
+        name = str(asset.get("name", ""))
+        if not (name.startswith(PROTOCOL_PACK_PREFIX) and name.endswith(PROTOCOL_PACK_SUFFIX)):
+            return None
+        value = name[len(PROTOCOL_PACK_PREFIX):-len(PROTOCOL_PACK_SUFFIX)]
+        try:
+            return _safe_component(value)
+        except UpdateError:
+            return None
+
     def _latest_app_release(self, releases: list[dict[str, Any]], include_prereleases: bool) -> dict[str, Any] | None:
         candidates = [
             release
@@ -251,16 +262,28 @@ class UpdateManager:
                     "release_tag": release.get("tag_name"),
                     "release_url": release.get("html_url"),
                     "published_at": release.get("published_at"),
+                    "pack_version": self._protocol_pack_version(asset),
                     "asset": self._public_asset(asset),
                 }
                 remote_digest = _sha256_value(asset.get("digest"))
+                remote_version = self._protocol_pack_version(asset)
+                same_version = bool(
+                    remote_version
+                    and local_pack.get("pack_version") == remote_version
+                )
                 pack_status = {
                     "local": local_pack,
                     "remote": remote,
                     "update_available": (
                         not local_pack["installed"]
-                        or _sha256_value(local_pack.get("source_digest")) != remote_digest
-                        or local_pack.get("source_asset") != asset.get("name")
+                        or (
+                            not same_version
+                            and (
+                                local_pack.get("pack_version") != remote_version
+                                or _sha256_value(local_pack.get("source_digest")) != remote_digest
+                                or local_pack.get("source_asset") != asset.get("name")
+                            )
+                        )
                     ),
                 }
 

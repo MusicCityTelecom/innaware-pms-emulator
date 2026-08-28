@@ -73,6 +73,7 @@ def test_update_check_selects_newer_prerelease(monkeypatch, tmp_path):
 def test_installed_protocol_pack_with_same_github_digest_is_current(monkeypatch, tmp_path):
     monkeypatch.setenv("INNAWARE_PMS_DATA_DIR", str(tmp_path))
     digest = "a" * 64
+    rebuilt_digest = "b" * 64
     packs = tmp_path / "protocol-packs"
     packs.mkdir()
     installed = packs / "2026.08.27.1"
@@ -92,13 +93,14 @@ def test_installed_protocol_pack_with_same_github_digest_is_current(monkeypatch,
         "tag_name": "v0.3.1", "draft": False, "prerelease": True,
         "published_at": "2026-08-28T04:12:16Z", "assets": [{
             "name": "InnAware-PMS-Protocol-Pack-2026.08.27.1.zip",
-            "digest": f"sha256:{digest}", "browser_download_url": "https://example.invalid/pack.zip",
+            "digest": f"sha256:{rebuilt_digest}", "browser_download_url": "https://example.invalid/pack.zip",
         }],
     }])
 
     status = manager.check("0.3.1", include_prereleases=True)
 
     assert status["protocol_pack"]["local"]["installed"] is True
+    assert status["protocol_pack"]["remote"]["pack_version"] == "2026.08.27.1"
     assert status["protocol_pack"]["update_available"] is False
 
 
