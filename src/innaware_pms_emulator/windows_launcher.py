@@ -17,8 +17,11 @@ from typing import Any
 import uvicorn
 
 from innaware_pms_emulator import __version__
+from innaware_pms_emulator.telemetry import telemetry_service
+from innaware_pms_emulator.updates import update_manager
 
 APP_TITLE = "InnAware PMS Emulator"
+TELEMETRY_SUPPRESS_ENV = "INNAWARE_PMS_TELEMETRY_SUPPRESS_STARTUP"
 
 
 def _data_dir() -> Path:
@@ -39,16 +42,7 @@ def _log_path() -> Path:
 
 
 def _server_log_config(log_level: str) -> dict[str, Any]:
-    """Return a file-only logging configuration safe for pythonw/PyInstaller.
-
-    A PyInstaller ``--windowed`` executable intentionally has no console, so
-    ``sys.stdout`` and ``sys.stderr`` can both be ``None``. Uvicorn's default
-    formatter probes ``sys.stdout.isatty()`` to decide whether to use colors,
-    which crashes a frozen GUI executable before the API can start. Keeping the
-    server log entirely file-backed also gives field technicians a persistent
-    diagnostic trail under the application's data directory.
-    """
-
+    """Return a file-only logging configuration safe for pythonw/PyInstaller."""
     levels = {
         "trace": 5,
         "debug": 10,
@@ -81,19 +75,14 @@ def _server_log_config(log_level: str) -> dict[str, Any]:
                 "level": level,
                 "propagate": False,
             },
-            "uvicorn.error": {
-                "level": level,
-            },
+            "uvicorn.error": {"level": level},
             "uvicorn.access": {
                 "handlers": ["file"],
                 "level": level,
                 "propagate": False,
             },
         },
-        "root": {
-            "handlers": ["file"],
-            "level": level,
-        },
+        "root": {"handlers": ["file"], "level": level},
     }
 
 
@@ -250,6 +239,18 @@ def _run_native_window(url: str, child: subprocess.Popen | None, log_handle: Any
         _stop_child(child, log_handle)
 
 
+def _start_user_launch_telemetry() -> None:
+    """Count one user-facing Windows launch and suppress the service duplicate."""
+    settings = update_manager.load_settings()
+    telemetry_service.start_background(
+        __version__,
+        enabled=bool(settings.get("send_anonymous_usage_statistics", True)),
+    )
+    # The local FastAPI service may run in this process or a child. In either
+    # case it inherits this flag and must not emit a second run event.
+    os.environ[TELEMETRY_SUPPRESS_ENV] = "1"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="InnAware PMS Emulator Windows field application")
     parser.add_argument("--host", default="127.0.0.1", help="HTTP management bind address")
@@ -265,8 +266,12 @@ def main() -> None:
         return
 
     if args.server_only:
+        # A direct service invocation has no parent launcher to count it; the
+        # FastAPI lifespan owns telemetry in this mode.
         _run_server_only(args.host, args.port, args.log_level)
         return
+
+    _start_user_launch_telemetry()
 
     existing = _health(args.host, args.port)
     port_used = _port_open(args.host, args.port)

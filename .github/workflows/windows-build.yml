@@ -37,10 +37,10 @@ jobs:
         shell: pwsh
         run: ./scripts/build-windows.ps1 -Python python
 
-      - name: Read application version
+      - name: Read canonical application version
         shell: pwsh
         run: |
-          $version = python -c "import sys; sys.path.insert(0,'src'); import innaware_pms_emulator; print(innaware_pms_emulator.__version__)"
+          $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
           "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Build sanitized protocol pack
@@ -55,6 +55,7 @@ jobs:
             dist-windows/InnAware-PMS-Emulator.exe
             dist-windows/InnAware-PMS-Emulator-Setup.exe
             dist-windows/README-WINDOWS.txt
+            dist-windows/PRIVACY-TELEMETRY.md
             dist-windows/SHA256SUMS.txt
             InnAware-PMS-Emulator-Windows-${{ env.APP_VERSION }}.zip
             InnAware-PMS-Emulator-Source-${{ env.APP_VERSION }}.zip
@@ -83,6 +84,8 @@ jobs:
           files: |
             dist-windows/InnAware-PMS-Emulator-Setup.exe
             dist-windows/InnAware-PMS-Emulator.exe
+            dist-windows/README-WINDOWS.txt
+            dist-windows/PRIVACY-TELEMETRY.md
             InnAware-PMS-Emulator-Windows-${{ env.APP_VERSION }}.zip
             InnAware-PMS-Emulator-Source-${{ env.APP_VERSION }}.zip
             dist-windows/SHA256SUMS.txt

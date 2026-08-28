@@ -1,12 +1,12 @@
 # InnAware PMS Emulator Updates
 
-InnAware PMS Emulator supports two independent update paths beginning with the 0.3.1 development line.
+InnAware PMS Emulator supports independent application and protocol-pack updates through the local **Update Center**.
 
 ## Application updates
 
 The application checks the public GitHub Releases feed for `MusicCityTelecom/innaware-pms-emulator`.
 
-The preferred Windows update asset is always:
+The preferred Windows update asset is:
 
 ```text
 InnAware-PMS-Emulator-Setup.exe
@@ -27,13 +27,7 @@ The application does **not** overwrite its own running one-file executable. It d
 
 ### Verification
 
-The updater prefers the SHA-256 digest published by GitHub for the release asset. If GitHub does not expose an asset digest, the updater looks for:
-
-```text
-SHA256SUMS.txt
-```
-
-in the same release and matches the exact asset filename. A download without a verifiable SHA-256 is rejected.
+The updater prefers the SHA-256 digest published by GitHub for the release asset. If GitHub does not expose an asset digest, the updater looks for `SHA256SUMS.txt` in the same release and matches the exact asset filename. A download without a verifiable SHA-256 is rejected.
 
 ## Protocol / stub packs
 
@@ -64,15 +58,17 @@ The current manifest schema is:
 }
 ```
 
-A protocol pack may contain:
-
-- sanitized JSON fixtures/stubs;
-- text/Markdown reference notes under `stubs/`;
-- data-only technician profile definitions for protocol engines already compiled into the application.
+A protocol pack may contain sanitized JSON fixtures/stubs, text/Markdown reference notes under `stubs/`, and data-only technician profile definitions for protocol engines already compiled into the application.
 
 A protocol pack may **not** contain executable code. The installer rejects Python, DLLs, EXEs, PowerShell, batch files, path traversal, unsupported paths, and oversized archives. Downloaded profile data also cannot replace a built-in technician profile shipped with the executable.
 
 New protocol parsers, state machines, framing logic, transports, or other executable behavior require a normal application release.
+
+### Active protocol-pack version
+
+The running application resolves its protocol-pack version from the active installed pack's manifest. If no independently installed pack is active, it uses the bundled canonical repository `protocol-pack.json` embedded in the Windows build.
+
+This same canonical value is shown in the Update Center and reported by anonymous usage telemetry. Updating a protocol pack independently therefore changes the version reported on the next application run without requiring an executable update.
 
 ## Building a protocol pack
 
@@ -101,7 +97,16 @@ http://127.0.0.1:8080/updates
 
 The main operator screen also exposes an **Updates** button.
 
-The Update Center shows application version/release state, installed protocol-pack state, and the automatic-check settings.
+The Update Center shows:
+
+- application version/release state;
+- installed and remote protocol-pack state;
+- automatic-check settings;
+- anonymous usage telemetry preference;
+- the local random installation UUID for troubleshooting;
+- current protocol-pack version;
+- privacy documentation;
+- support email and website links.
 
 ## Defaults
 
@@ -110,10 +115,30 @@ The defaults are:
 - application update check on startup: enabled;
 - protocol-pack update check on startup: enabled;
 - include prereleases: enabled during the field-beta line;
-- automatic installation: disabled.
+- anonymous usage statistics: enabled;
+- automatic application installation: disabled.
 
 Checks run in the background and never block normal emulator startup. Downloads/installs remain explicit user actions.
 
+## Anonymous usage telemetry
+
+Telemetry is independent of the GitHub updater. The preference is stored in the same application settings system under:
+
+```text
+Send anonymous usage statistics
+```
+
+When disabled, the emulator makes no telemetry requests. When enabled, telemetry is short-timeout and background-only.
+
+See [`PRIVACY_TELEMETRY.md`](PRIVACY_TELEMETRY.md) for the exact event behavior and outbound field allowlist.
+
+## Support
+
+Email: **support@innawareucp.com**  
+Website: **https://support.innawareucp.com**
+
 ## Privacy and scope
 
-The updater sends ordinary unauthenticated HTTPS requests to GitHub's public release endpoints. It does not upload hotel, guest, interface, capture, or property data.
+The GitHub updater sends ordinary unauthenticated HTTPS requests to GitHub's public release endpoints and does not upload hotel, guest, interface, capture, or property data.
+
+Anonymous usage telemetry is a separate HTTPS POST to the InnAware telemetry endpoint and is governed by the explicit privacy contract in `PRIVACY_TELEMETRY.md`.

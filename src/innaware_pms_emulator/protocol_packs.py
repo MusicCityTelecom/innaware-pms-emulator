@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -61,6 +63,49 @@ def active_pack_manifest() -> dict[str, Any] | None:
     if _safe_version(str(manifest.get("pack_version", ""))) != info["pack_version"]:
         return None
     return manifest
+
+
+def _bundled_manifest_candidates() -> list[Path]:
+    candidates: list[Path] = []
+    override = os.environ.get("INNAWARE_PMS_PROTOCOL_PACK_MANIFEST")
+    if override:
+        candidates.append(Path(override).expanduser())
+    frozen_root = getattr(sys, "_MEIPASS", None)
+    if frozen_root:
+        candidates.append(Path(frozen_root) / "protocol-pack.json")
+    try:
+        candidates.append(Path(__file__).resolve().parents[2] / "protocol-pack.json")
+    except (IndexError, OSError):
+        pass
+    try:
+        candidates.append(Path(sys.executable).resolve().parent / "protocol-pack.json")
+    except OSError:
+        pass
+    return candidates
+
+
+def bundled_pack_manifest() -> dict[str, Any] | None:
+    for path in _bundled_manifest_candidates():
+        try:
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+            if manifest.get("schema_version") != PACK_SCHEMA_VERSION:
+                continue
+            manifest["pack_version"] = _safe_version(str(manifest.get("pack_version", "")))
+            return manifest
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            continue
+    return None
+
+
+def current_protocol_pack_version() -> str:
+    """Return the version of the pack the running application is actually using."""
+    active = active_pack_manifest()
+    if active:
+        return str(active["pack_version"])
+    bundled = bundled_pack_manifest()
+    if bundled:
+        return str(bundled["pack_version"])
+    return "unknown"
 
 
 def active_pack_profiles() -> list[dict[str, Any]]:

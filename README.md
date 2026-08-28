@@ -1,7 +1,7 @@
 # InnAware PMS Emulator
 
 **Author:** Tommy Heggie  
-**Current development version:** 0.3.5
+**Current development version:** 0.3.6  
 **Latest published field beta:** v0.3.0-beta  
 **Primary user platform:** Windows 10/11 x64  
 **Engineering/lab platform:** Linux / Debian
@@ -52,21 +52,13 @@ Persistent data and logs are stored under:
 %LOCALAPPDATA%\InnAware\PMS Emulator
 ```
 
-The local management API listens on:
-
-```text
-127.0.0.1:8080
-```
-
-by default. PMS and call-accounting test interfaces may bind to other local/LAN addresses as required by the test.
+The local management API listens on `127.0.0.1:8080` by default. PMS and call-accounting test interfaces may bind to other local/LAN addresses as required by the test.
 
 See [`docs/WINDOWS_QUICK_START.md`](docs/WINDOWS_QUICK_START.md) for the end-user walkthrough.
 
 ## Updates
 
-Beginning with the 0.3.1 development line, the application includes an **Update Center**.
-
-Open it from the **Updates** button in the operator window or directly at:
+The application includes an **Update Center**. Open it from the **Updates** button in the operator window or directly at:
 
 ```text
 http://127.0.0.1:8080/updates
@@ -78,15 +70,55 @@ The Update Center can:
 - check manually with **Check Now**;
 - include or exclude beta/prerelease releases;
 - download a newer `InnAware-PMS-Emulator-Setup.exe`;
-- verify the release asset with SHA-256 before accepting it;
+- verify a release asset with SHA-256 before accepting it;
 - launch the verified Windows installer;
-- independently check for and install data-only protocol/stub packs.
+- independently check for and install data-only protocol/stub packs;
+- show the active protocol-pack version;
+- manage anonymous usage telemetry;
+- display the local random installation UUID for troubleshooting;
+- provide direct support email and website links.
 
 Automatic **installation** is deliberately disabled. The program may check automatically, but downloading/installing remains an explicit user action.
 
-`v0.3.0-beta` predates the Update Center, so an existing 0.3.0 installation must be upgraded manually to the first release that contains this feature. Later releases can then be discovered from inside the application.
-
 See [`docs/UPDATES.md`](docs/UPDATES.md) for the release/update contract.
+
+## Anonymous usage telemetry
+
+Beginning with 0.3.6, anonymous usage statistics are enabled by default and can be disabled from **Update Center > Preferences > Send anonymous usage statistics**.
+
+Telemetry is best-effort, asynchronous, short-timeout, and never blocks application startup or normal offline operation. When disabled, the application makes no telemetry requests.
+
+The production endpoint is:
+
+```text
+https://telemetry.innawareucp.com/pms-telemetry.php
+```
+
+On the first telemetry-enabled run, the emulator generates a random UUID-v4 and attempts one `install` event plus one `run` event. Later telemetry-enabled launches reuse that UUID and attempt one `run` event only.
+
+The outbound JSON body contains only:
+
+```text
+event
+version
+platform
+architecture
+protocol_pack_version
+install_id
+```
+
+The UUID is randomly generated and is not derived from a MAC address, hostname, username, Windows SID, machine GUID, hardware serial, IP address, or other machine identifier. The application does not put PMS data, hotel/property data, credentials, guest/room data, telephone numbers, call records, network configuration, license keys, or user filesystem paths into telemetry JSON.
+
+The currently loaded protocol-pack version is read from the actual active pack metadata, falling back to the bundled canonical `protocol-pack.json`. If a protocol pack is updated independently, the next application run reports that new pack version.
+
+The complete auditable privacy contract is in [`docs/PRIVACY_TELEMETRY.md`](docs/PRIVACY_TELEMETRY.md), and the implementation is intentionally visible in `src/innaware_pms_emulator/telemetry.py`.
+
+## Support
+
+- Email: **support@innawareucp.com**
+- Website: **https://support.innawareucp.com**
+
+Both are linked directly from the Update Center.
 
 ## Protocol / stub packs
 
@@ -119,7 +151,7 @@ python scripts/build-protocol-pack.py
 7. Generate check-ins, check-outs, room moves, wakeups, room-state changes, or call records.
 8. Inspect the live RX/TX capture and protocol state.
 9. Export captures or generate a support bundle when troubleshooting.
-10. Use **Updates** to check application/protocol-pack status when desired.
+10. Use **Updates** to check application/protocol-pack status, telemetry preference, and support information.
 
 ## Built-in technician profiles
 
@@ -127,6 +159,7 @@ Current built-in profiles include:
 
 - Generic FIAS PMS - TCP Server
 - Hilton / PEP FIAS - TCP Server
+- OperaIP / legacy Opera TCP compatibility profile
 - **Mitel 1** - Serial
 - **Mitel 2** - Serial
 - TelElectronics InnForm XL - TCP Server
@@ -146,13 +179,9 @@ Mitel 2
 
 Historical/internal DEFAULT and DEFAULT2 identifiers are retained only as hidden restore aliases for old saved emulator configuration.
 
-### Mitel 1
+**Mitel 1** uses the classic fixed-width guest-name layout where the room field follows the name field.
 
-Classic fixed-width guest-name layout where the room field follows the name field.
-
-### Mitel 2
-
-Compatibility layout where the five-character room field appears before the variable-length guest name. This avoids long guest names shifting the room position.
+**Mitel 2** uses the compatibility layout where the five-character room field appears before the variable-length guest name, avoiding long guest names shifting the room position.
 
 Default serial preset:
 
@@ -174,15 +203,16 @@ See [`docs/MITEL_SERIAL_PROFILES.md`](docs/MITEL_SERIAL_PROFILES.md).
 | --- | --- | --- | --- |
 | FIAS | PMS | stateful | Link negotiation, posting answer, guest events, and property-backed database resync |
 | HILTON_PEP_FIAS | PMS | stateful | Combined Hilton/PEP guest-name behavior and FIAS-family state handling |
+| OperaIP / legacy Opera | PMS | compatibility | Voiceware-era TCP handshake/control behavior and legacy operational masks |
 | Mitel 1 | PMS | fixture-backed | Classic serial hotel PMS layout with fixed-width name/room placement |
 | Mitel 2 | PMS | fixture-backed | Serial compatibility layout with room before variable guest name |
 | ONQ | PMS | encoder | Message-generation foundation; additional session behavior remains under development |
 | CHOICE_ADVANTAGE | PMS | encoder | Legacy message-generation foundation |
 | OPERA_LEGACY | PMS | encoder | Legacy Opera-style foundation; FIAS is used for FIAS-family testing |
 | INNFORM_XL | Call accounting | transactional | Field-tested InnForm XL/TEL-family record plus ENQ/ACK transaction mode |
-| HOBIS | Call accounting | transactional | Verified 54-character HOBIS-A layout with ENQ/ACK and STX/ETX/XOR-BCC record transaction |
+| HOBIS | Call accounting | transactional | Verified HOBIS-A layout with ENQ/ACK and STX/ETX/XOR-BCC transaction |
 | HOBIS_A | Call accounting | transactional | Explicit compatibility name for the verified HOBIS-A layout |
-| HOLIDEX | Call accounting | transactional | HOBIS/Holidex compatibility alias using the verified HOBIS-A transaction family |
+| HOLIDEX | Call accounting | transactional | HOBIS/Holidex compatibility alias using the verified transaction family |
 | BLIND_SMDR | Call accounting | encoder | Line-oriented blind-send SMDR output |
 | HOTELKEY | PMS | planned | HTTP/JSON transport/profile work remains pending |
 | HOBIC / HOBIS2 / HOBIS_B / MICROS_CA / ROOMKEY / PROFITWATCH / RAW_SMDR | Call accounting | planned | Requirements identified; exact fixtures still required before implementation claims |
@@ -191,30 +221,13 @@ Compatibility requirements and historical edge cases are tracked in [`docs/PROTO
 
 ## Sanitized stub policy
 
-Repository stubs are synthetic fixtures only. They must not contain real guest/customer names, hotel/company names, credentials, or customer-specific data.
+Repository stubs are synthetic fixtures only. They must not contain real guest/customer names, hotel/company names, credentials, customer-specific data, concrete customer dates, addresses, phone numbers, or deployment identifiers.
 
-The test suite scans the stub set for known real-person/company/vendor strings so accidental data leakage is caught before release.
+The test suite scans the stub set so accidental identifying data is caught before release.
 
 ## Property-state model
 
-The emulator maintains persistent hotel state instead of treating protocol messages as isolated text records.
-
-Each property can contain:
-
-- rooms and room types;
-- building/floor information;
-- housekeeping and out-of-order state;
-- guests and stays;
-- check-in/check-out state;
-- room moves;
-- wakeups;
-- calling restrictions;
-- DND;
-- MWI count;
-- language;
-- voicemail lifecycle state;
-- call-accounting history;
-- property audit events.
+The emulator maintains persistent hotel state instead of treating protocol messages as isolated text records. Each property can contain rooms, housekeeping state, guests/stays, room moves, wakeups, calling restrictions, DND, MWI, language, voicemail lifecycle, call-accounting history, and property audit events.
 
 FIAS database resynchronization can therefore be generated from the actual active occupancy database rather than hard-coded test messages.
 
@@ -225,24 +238,11 @@ FIAS database resynchronization can therefore be generated from the actual activ
 - Serial / Windows COM port
 - HTTP server framework for future HTTP/JSON PMS integrations
 
-Serial configuration supports:
-
-- baud rate;
-- 5/6/7/8 data bits;
-- N/E/O/M/S parity;
-- 1/1.5/2 stop bits;
-- none / RTS-CTS / XON-XOFF flow control.
+Serial configuration supports baud rate, 5/6/7/8 data bits, N/E/O/M/S parity, 1/1.5/2 stop bits, and none / RTS-CTS / XON-XOFF flow control.
 
 ## Framing and transactions
 
-Supported framing includes:
-
-- raw;
-- CR;
-- LF;
-- CRLF;
-- STX/ETX;
-- STX/ETX with XOR BCC.
+Supported framing includes raw, CR, LF, CRLF, STX/ETX, and STX/ETX with XOR BCC.
 
 Transactional flows include:
 
@@ -276,11 +276,7 @@ End users do **not** need Python. These instructions are only for developers bui
 
 ### Build prerequisites
 
-Install:
-
-- Git
-- Python 3.13
-- Inno Setup 6 if you want `Setup.exe`
+Install Git, Python 3.13, and Inno Setup 6 if you want `Setup.exe`.
 
 Using Winget:
 
@@ -305,19 +301,20 @@ powershell -ExecutionPolicy Bypass `
   -Python py
 ```
 
-The builder runs the full Python test suite, creates the one-file/windowed EXE, launches the actual frozen EXE for a runtime smoke test, builds the installer when Inno Setup is available, and generates release ZIP/checksum artifacts.
+The builder runs the full Python test suite, creates the one-file/windowed EXE, embeds the canonical protocol-pack manifest, launches the actual frozen EXE for a runtime smoke test with telemetry disabled, builds the installer when Inno Setup is available, copies the privacy document, and generates release ZIP/checksum artifacts.
 
-Expected 0.3.5 application outputs:
+Expected 0.3.6 application outputs:
 
 ```text
 dist-windows\InnAware-PMS-Emulator.exe
 dist-windows\InnAware-PMS-Emulator-Setup.exe
 dist-windows\README-WINDOWS.txt
+dist-windows\PRIVACY-TELEMETRY.md
 dist-windows\SHA256SUMS.txt
 
-InnAware-PMS-Emulator-Windows-0.3.5.zip
-InnAware-PMS-Emulator-Source-0.3.5.zip
-SHA256SUMS-WINDOWS-0.3.1.txt
+InnAware-PMS-Emulator-Windows-0.3.6.zip
+InnAware-PMS-Emulator-Source-0.3.6.zip
+SHA256SUMS-WINDOWS-0.3.6.txt
 ```
 
 Build the independent protocol pack with:
@@ -358,13 +355,7 @@ pytest -q
 uvicorn innaware_pms_emulator.main:app --app-dir src --host 127.0.0.1 --port 8080
 ```
 
-The repository also contains:
-
-```text
-packaging/systemd/innaware-pms-emulator.service
-scripts/install-systemd.sh
-scripts/verify-server3.sh
-```
+The repository also contains `packaging/systemd/innaware-pms-emulator.service`, `scripts/install-systemd.sh`, and `scripts/verify-server3.sh`.
 
 ## Architecture
 
@@ -391,7 +382,7 @@ The protocol engine is deliberately shared. A future WinUI/WinForms shell may im
 
 `v0.3.0-beta` passed the Linux/server laboratory regression gate and the actual Windows frozen-EXE/installer build gate.
 
-The 0.3.5 development line fixes Windows upgrades while retaining the direct protocol-debug and Voiceware-era OperaIP corrections from 0.3.4. It remains a field-beta prerelease.
+The 0.3.6 development line adds auditable anonymous telemetry, active protocol-pack reporting, Update Center/support improvements, and release packaging changes while retaining the protocol and Windows-upgrade improvements from 0.3.5. It remains a field-beta prerelease until the normal Windows build/install gates are completed for this version.
 
 ## Safety
 

@@ -73,6 +73,7 @@ class UpdateManager:
             "check_app_updates_on_start": True,
             "check_protocol_updates_on_start": True,
             "include_prereleases": True,
+            "send_anonymous_usage_statistics": True,
         }
 
     def load_settings(self) -> dict[str, Any]:
@@ -267,10 +268,7 @@ class UpdateManager:
                 }
                 remote_digest = _sha256_value(asset.get("digest"))
                 remote_version = self._protocol_pack_version(asset)
-                same_version = bool(
-                    remote_version
-                    and local_pack.get("pack_version") == remote_version
-                )
+                same_version = bool(remote_version and local_pack.get("pack_version") == remote_version)
                 pack_status = {
                     "local": local_pack,
                     "remote": remote,
@@ -314,7 +312,6 @@ class UpdateManager:
             try:
                 self.check(current_version, include_prereleases=bool(settings["include_prereleases"]))
             except Exception:
-                # Update checks must never prevent application startup.
                 return
 
         threading.Thread(target=worker, name="innaware-update-check", daemon=True).start()
@@ -434,14 +431,7 @@ class UpdateManager:
             source_digest=digest,
         )
 
-    def install_protocol_pack_file(
-        self,
-        archive_path: Path,
-        *,
-        source_release: str,
-        source_asset: str,
-        source_digest: str,
-    ) -> dict[str, Any]:
+    def install_protocol_pack_file(self, archive_path: Path, *, source_release: str, source_asset: str, source_digest: str) -> dict[str, Any]:
         try:
             archive = zipfile.ZipFile(archive_path, "r")
         except (OSError, zipfile.BadZipFile) as exc:

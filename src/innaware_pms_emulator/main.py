@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import os
 import platform
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -17,11 +18,12 @@ from .operator_console import html as operator_html
 from .profiles import build_interface_from_profile, profile_catalog
 from .property_api import router as property_router
 from .property_state import property_manager
-from .protocol_packs import active_pack_stubs
+from .protocol_packs import active_pack_stubs, current_protocol_pack_version
 from .protocols.registry import REGISTRY, protocol_catalog
 from .sessions import manager
 from .storage import data_dir, store
 from .support import build_support_bundle, capture_export, safe_name
+from .telemetry import telemetry_service
 from .update_console import html as update_html
 from .updates import UpdateError, update_manager
 
@@ -29,6 +31,12 @@ from .updates import UpdateError, update_manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await manager.restore(store.load())
+    settings = update_manager.load_settings()
+    if os.environ.get("INNAWARE_PMS_TELEMETRY_SUPPRESS_STARTUP") != "1":
+        telemetry_service.start_background(
+            __version__,
+            enabled=bool(settings.get("send_anonymous_usage_statistics", True)),
+        )
     update_manager.start_background_check(__version__)
     try:
         yield
@@ -61,6 +69,7 @@ class UpdateSettingsRequest(BaseModel):
     check_app_updates_on_start: bool = True
     check_protocol_updates_on_start: bool = True
     include_prereleases: bool = True
+    send_anonymous_usage_statistics: bool = True
 
 
 def _interface_or_404(name: str):
@@ -117,6 +126,7 @@ def app_info():
     return {
         "product": "InnAware PMS Emulator",
         "version": __version__,
+        "protocol_pack_version": current_protocol_pack_version(),
         "platform": platform.system(),
         "platform_release": platform.release(),
         "machine": platform.machine(),
@@ -176,6 +186,15 @@ def update_settings():
 @app.put("/api/v1/updates/settings")
 def save_update_settings(request: UpdateSettingsRequest):
     return update_manager.save_settings(request.model_dump())
+
+
+@app.get("/api/v1/telemetry/status")
+def telemetry_status():
+    settings = update_manager.load_settings()
+    return telemetry_service.public_status(
+        __version__,
+        enabled=bool(settings.get("send_anonymous_usage_statistics", True)),
+    )
 
 
 @app.post("/api/v1/updates/check")

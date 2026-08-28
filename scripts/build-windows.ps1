@@ -24,38 +24,25 @@ $TaskKill = Join-Path $env:SystemRoot "System32\taskkill.exe"
 
 function Get-OutputExeProcesses {
     param([string]$ExePath)
-
     if (-not $ExePath) { return @() }
     $Expected = [System.IO.Path]::GetFullPath($ExePath)
     try {
         return @(Get-CimInstance Win32_Process -Filter "Name='InnAware-PMS-Emulator.exe'" -ErrorAction SilentlyContinue |
-            Where-Object {
-                $_.ExecutablePath -and
-                ([System.IO.Path]::GetFullPath($_.ExecutablePath) -ieq $Expected)
-            })
+            Where-Object { $_.ExecutablePath -and ([System.IO.Path]::GetFullPath($_.ExecutablePath) -ieq $Expected) })
     }
-    catch {
-        return @()
-    }
+    catch { return @() }
 }
 
 function Stop-OutputExeProcesses {
     param([string]$ExePath)
-
     $Matches = @(Get-OutputExeProcesses -ExePath $ExePath)
     if ($Matches.Count -eq 0) { return }
-
     Write-Host "Stopping prior InnAware PMS Emulator process tree(s) from build output..." -ForegroundColor Yellow
     foreach ($Item in $Matches) {
         Write-Host "  PID $($Item.ProcessId): $($Item.ExecutablePath)" -ForegroundColor DarkGray
-        if (Test-Path $TaskKill) {
-            & $TaskKill /PID $Item.ProcessId /T /F 2>$null | Out-Null
-        }
-        else {
-            Stop-Process -Id $Item.ProcessId -Force -ErrorAction SilentlyContinue
-        }
+        if (Test-Path $TaskKill) { & $TaskKill /PID $Item.ProcessId /T /F 2>$null | Out-Null }
+        else { Stop-Process -Id $Item.ProcessId -Force -ErrorAction SilentlyContinue }
     }
-
     for ($i = 0; $i -lt 50; $i++) {
         if (@(Get-OutputExeProcesses -ExePath $ExePath).Count -eq 0) { return }
         Start-Sleep -Milliseconds 100
@@ -64,82 +51,48 @@ function Stop-OutputExeProcesses {
 
 function Remove-BuildOutputDirectory {
     param([string]$Path, [string]$ExePath)
-
     if (-not (Test-Path -LiteralPath $Path)) { return }
-
     Stop-OutputExeProcesses -ExePath $ExePath
-
     $LastError = $null
     for ($Attempt = 1; $Attempt -le 40; $Attempt++) {
-        try {
-            Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
-            return
-        }
+        try { Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop; return }
         catch {
             $LastError = $_
-            if ($Attempt -eq 1) {
-                Write-Host "Build output is temporarily locked; waiting for Windows to release file handles..." -ForegroundColor Yellow
-            }
+            if ($Attempt -eq 1) { Write-Host "Build output is temporarily locked; waiting for Windows to release file handles..." -ForegroundColor Yellow }
             Start-Sleep -Milliseconds 250
             Stop-OutputExeProcesses -ExePath $ExePath
         }
     }
-
     $Remaining = @(Get-OutputExeProcesses -ExePath $ExePath)
     if ($Remaining.Count -gt 0) {
         $Pids = @($Remaining | ForEach-Object { $_.ProcessId }) -join ", "
         throw "Unable to clean '$Path'. InnAware-PMS-Emulator.exe is still running from that directory (PID(s): $Pids). Close the application and retry. Last error: $($LastError.Exception.Message)"
     }
-
-    throw "Unable to clean '$Path' after 10 seconds. Windows still has a file handle open (often antivirus/indexing immediately after a new EXE is run). Retry once the handle is released. Last error: $($LastError.Exception.Message)"
+    throw "Unable to clean '$Path' after 10 seconds. Windows still has a file handle open. Retry once the handle is released. Last error: $($LastError.Exception.Message)"
 }
 
 function Find-InnoSetupCompiler {
     $Candidates = @()
-
     try {
         $Command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-        if ($Command -and $Command.Source) {
-            $Candidates += $Command.Source
-        }
+        if ($Command -and $Command.Source) { $Candidates += $Command.Source }
     }
     catch {}
-
     $ProgramFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
     $ProgramFiles64 = [Environment]::GetEnvironmentVariable("ProgramFiles")
     $LocalAppData = [Environment]::GetEnvironmentVariable("LOCALAPPDATA")
-
-    if ($ProgramFilesX86) {
-        $Candidates += (Join-Path $ProgramFilesX86 "Inno Setup 6\ISCC.exe")
-    }
-    if ($ProgramFiles64) {
-        $Candidates += (Join-Path $ProgramFiles64 "Inno Setup 6\ISCC.exe")
-    }
-    if ($LocalAppData) {
-        $Candidates += (Join-Path $LocalAppData "Programs\Inno Setup 6\ISCC.exe")
-    }
-
-    $Existing = @(
-        $Candidates |
-            Where-Object { $_ -and (Test-Path -LiteralPath $_) } |
-            ForEach-Object { [System.IO.Path]::GetFullPath($_) } |
-            Select-Object -Unique
-    )
-
-    if ($Existing.Count -gt 0) {
-        return $Existing[0]
-    }
+    if ($ProgramFilesX86) { $Candidates += (Join-Path $ProgramFilesX86 "Inno Setup 6\ISCC.exe") }
+    if ($ProgramFiles64) { $Candidates += (Join-Path $ProgramFiles64 "Inno Setup 6\ISCC.exe") }
+    if ($LocalAppData) { $Candidates += (Join-Path $LocalAppData "Programs\Inno Setup 6\ISCC.exe") }
+    $Existing = @($Candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | ForEach-Object { [System.IO.Path]::GetFullPath($_) } | Select-Object -Unique)
+    if ($Existing.Count -gt 0) { return $Existing[0] }
     return $null
 }
 
 $Venv = Join-Path $RepoRoot ".venv-winbuild"
 if (-not (Test-Path $Venv)) {
-    if ($Python -eq "py") {
-        & py -3 -m venv $Venv
-    }
-    else {
-        & $Python -m venv $Venv
-    }
+    if ($Python -eq "py") { & py -3 -m venv $Venv }
+    else { & $Python -m venv $Venv }
     if ($LASTEXITCODE -ne 0) { throw "Unable to create Windows build virtual environment." }
 }
 
@@ -197,6 +150,9 @@ VSVersionInfo(
 )
 "@ | Set-Content -Path $VersionFile -Encoding utf8
 
+$ProtocolPackManifest = Join-Path $RepoRoot "protocol-pack.json"
+if (-not (Test-Path $ProtocolPackManifest)) { throw "Canonical protocol-pack.json is missing" }
+
 & $Py -m PyInstaller `
     --noconfirm `
     --clean `
@@ -204,6 +160,8 @@ VSVersionInfo(
     --windowed `
     --name InnAware-PMS-Emulator `
     --version-file $VersionFile `
+    --copy-metadata innaware-pms-emulator `
+    --add-data "$ProtocolPackManifest;." `
     --collect-all innaware_pms_emulator `
     --collect-all uvicorn `
     --collect-all fastapi `
@@ -245,8 +203,19 @@ Persistent state and logs are stored under:
 
 The management API binds to 127.0.0.1:8080 by default. PMS/call-accounting interfaces may bind to LAN addresses as required by the test.
 
+UPDATES AND TELEMETRY
+=====================
+Open Update Center from the application to check for application/protocol-pack updates and manage anonymous usage statistics.
+
+Anonymous usage statistics are enabled by default and can be disabled there. Telemetry uses a random UUID-v4 and sends only event, application version, platform, architecture, current protocol-pack version, and the installation UUID. It never sends PMS traffic, guest/hotel data, credentials, network configuration, hardware IDs, usernames, or hostnames.
+
+See PRIVACY-TELEMETRY.md for the complete privacy contract.
+
 SUPPORT
 =======
+Email:   support@innawareucp.com
+Website: https://support.innawareucp.com
+
 Privacy-aware support bundle:
   http://127.0.0.1:8080/api/v1/support-bundle
 
@@ -269,6 +238,10 @@ This software is a test/emulation instrument. Do not connect it to a production 
 Copyright (c) 2026 Tommy Heggie.
 "@
 Set-Content -Path (Join-Path $OutputPath "README-WINDOWS.txt") -Value $Readme -Encoding utf8
+
+$PrivacySource = Join-Path $RepoRoot "docs\PRIVACY_TELEMETRY.md"
+$PrivacyOutput = Join-Path $OutputPath "PRIVACY-TELEMETRY.md"
+Copy-Item -LiteralPath $PrivacySource -Destination $PrivacyOutput -Force
 
 $ExeHash = Get-FileHash -Algorithm SHA256 $Exe
 $HashLines = @("$($ExeHash.Hash.ToLower())  InnAware-PMS-Emulator.exe")
@@ -299,6 +272,7 @@ if (Test-Path $Zip) { Remove-Item -Force $Zip }
 $PortableFiles = @(
     $Exe,
     (Join-Path $OutputPath "README-WINDOWS.txt"),
+    $PrivacyOutput,
     (Join-Path $OutputPath "SHA256SUMS.txt")
 )
 Compress-Archive -Path $PortableFiles -DestinationPath $Zip

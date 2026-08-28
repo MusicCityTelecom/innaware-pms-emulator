@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.3.0"
+  #error AppVersion must be supplied by the canonical Windows build script
 #endif
 #ifndef SourceDir
   #define SourceDir "..\..\dist-windows"
@@ -9,6 +9,7 @@
 #define AppExeName "InnAware-PMS-Emulator.exe"
 #define AppPublisher "Tommy Heggie"
 #define AppURL "https://github.com/MusicCityTelecom/innaware-pms-emulator"
+#define SupportURL "https://support.innawareucp.com"
 
 [Setup]
 AppId={{A54BD30A-BC7D-46AB-AE64-054A79D68EC2}
@@ -16,8 +17,8 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
 AppPublisherURL={#AppURL}
-AppSupportURL={#AppURL}
-AppUpdatesURL={#AppURL}
+AppSupportURL={#SupportURL}
+AppUpdatesURL={#AppURL}/releases
 DefaultDirName={localappdata}\Programs\InnAware PMS Emulator
 DefaultGroupName=InnAware PMS Emulator
 DisableProgramGroupPage=yes
@@ -45,6 +46,7 @@ RestartApplications=no
 [Files]
 Source: "{#SourceDir}\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\README-WINDOWS.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\PRIVACY-TELEMETRY.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\SHA256SUMS.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]

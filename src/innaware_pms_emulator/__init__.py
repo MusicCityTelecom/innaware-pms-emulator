@@ -1,1 +1,4 @@
-__version__ = "0.3.5"
+from importlib.metadata import version
+
+
+__version__ = version("innaware-pms-emulator")
