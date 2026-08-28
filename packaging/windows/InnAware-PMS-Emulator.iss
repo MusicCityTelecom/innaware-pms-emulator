@@ -38,6 +38,9 @@ VersionInfoProductName={#AppName}
 VersionInfoProductVersion={#AppVersion}
 VersionInfoCopyright=Copyright (c) 2026 Tommy Heggie
 SetupLogging=yes
+CloseApplications=force
+CloseApplicationsFilter={#AppExeName}
+RestartApplications=no
 
 [Files]
 Source: "{#SourceDir}\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
@@ -58,6 +61,25 @@ Filename: "{app}\{#AppExeName}"; Description: "Launch InnAware PMS Emulator"; Fl
 Type: filesandordirs; Name: "{app}"
 
 [Code]
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  { PyInstaller one-file mode may leave a launcher and child process using the
+    installed EXE. Restart Manager does not consistently close that process
+    tree, so terminate only this product image before replacing the file. }
+  Exec(
+    ExpandConstant('{sys}\taskkill.exe'),
+    '/F /T /IM "{#AppExeName}"',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  );
+  Sleep(500);
+  Result := '';
+end;
+
 function InitializeUninstall(): Boolean;
 begin
   Result := True;

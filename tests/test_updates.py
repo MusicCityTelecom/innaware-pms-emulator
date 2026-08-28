@@ -158,7 +158,7 @@ def test_protocol_pack_cannot_override_builtin_profile(monkeypatch, tmp_path):
     archive.write_bytes(_pack_bytes(profiles=[override]))
     manager.install_protocol_pack_file(archive, source_release="test", source_asset="test.zip", source_digest="0" * 64)
     catalog = {item["id"]: item for item in profile_catalog()}
-    assert catalog["fias-pms-tcp-server"]["name"] == "Generic FIAS PMS - TCP Server"
+    assert catalog["fias-pms-tcp-server"]["name"] == "Generic CRLF FIAS (No ENQ/ACK) - TCP Server"
     assert catalog["fias-pms-tcp-server"]["source"] == "built-in"
 
 

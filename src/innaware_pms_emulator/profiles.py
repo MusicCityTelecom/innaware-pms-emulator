@@ -24,11 +24,11 @@ class InterfaceProfile(BaseModel):
 BUILTIN_PROFILES: dict[str, InterfaceProfile] = {
     "fias-pms-tcp-server": InterfaceProfile(
         id="fias-pms-tcp-server",
-        name="Generic FIAS PMS - TCP Server",
+        name="Generic CRLF FIAS (No ENQ/ACK) - TCP Server",
         purpose="pms",
         protocol="FIAS",
         maturity="stateful",
-        description="Generic FIAS-family PMS listener with property-backed database resynchronization.",
+        description="Generic line-oriented CRLF FIAS listener without the legacy ENQ/ACK handshake; the PBX must be configured for matching FIAS transport.",
         defaults={
             "transport": "tcp_server",
             "bind_host": "0.0.0.0",

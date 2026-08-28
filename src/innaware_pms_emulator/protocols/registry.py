@@ -67,7 +67,7 @@ _MITEL_RECOMMENDED = {
 PROTOCOL_METADATA = {
     "FIAS": {
         "maturity": "stateful",
-        "description": "Generic FIAS-family PMS adapter with link negotiation, posting acknowledgement and property database resync.",
+        "description": "Generic line-oriented CRLF FIAS without ENQ/ACK; requires a PBX interface configured for matching FIAS transport.",
         "recommended": {"framing": "crlf", "role": "pms"},
     },
     "HILTON_PEP_FIAS": {
