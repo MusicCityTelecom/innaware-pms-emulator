@@ -5,7 +5,7 @@ from .call_accounting import (
     HolidexAdapter,
     InnFormXLAdapter,
 )
-from .fias import FiasAdapter, HiltonPepFiasAdapter
+from .fias import FiasAdapter, HiltonPepFiasAdapter, OperaIpFiasAdapter
 from .legacy import ChoiceAdvantageAdapter, OnQAdapter, OperaLegacyAdapter
 from .mitel import Mitel1Adapter, Mitel2Adapter
 
@@ -16,6 +16,7 @@ def build_registry():
     return {
         "FIAS": FiasAdapter(),
         "HILTON_PEP_FIAS": HiltonPepFiasAdapter(),
+        "OPERAIP_FIAS": OperaIpFiasAdapter(),
         "MITEL 1": mitel_1,
         "MITEL 2": mitel_2,
         # Historical/internal aliases are retained only so old saved emulator
@@ -73,6 +74,16 @@ PROTOCOL_METADATA = {
         "maturity": "stateful",
         "description": "Hilton/PEP FIAS-family adapter using combined guest-name semantics and no separate GF field.",
         "recommended": {"framing": "stx_etx", "role": "pms"},
+    },
+    "OPERAIP_FIAS": {
+        "maturity": "field-observed",
+        "description": "Legacy OperaIP-compatible FIAS transport using ENQ/ACK and STX/ETX without a checksum.",
+        "recommended": {
+            "framing": "stx_etx", "role": "pms", "auto_ack": True,
+            "ack_enq": True, "ack_records": True, "checksum": "none",
+            "pms_to_pbx_masks": ["AREYUTHERE", "GRS", "END", "EDT", "DND", "CHK", "LNG", "LMT", "MOV", "MSG", "MW", "NAM", "RST", "SDD", "STE", "VIP", "WKP"],
+            "pbx_to_pms_masks": ["STS", "RQINZ"],
+        },
     },
     "MITEL 1": {
         "maturity": "fixture-backed",

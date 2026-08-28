@@ -14,11 +14,21 @@ def test_builtin_profiles_cover_primary_field_workflows():
     catalog = {item["id"]: item for item in profile_catalog()}
     assert "fias-pms-tcp-server" in catalog
     assert "hilton-pep-fias-tcp-server" in catalog
+    assert "operaip-fias-tcp-server" in catalog
     assert "mitel-1-serial" in catalog
     assert "mitel-2-serial" in catalog
     assert "innform-xl-tcp-server" in catalog
     assert "hobis-a-tcp-server" in catalog
     assert catalog["hilton-pep-fias-tcp-server"]["defaults"]["options"]["framing"] == "stx_etx"
+    opera = catalog["operaip-fias-tcp-server"]["defaults"]["options"]
+    assert opera["control_bytes"] == {"enq": 5, "ack": 6, "stx": 2, "etx": 3, "nak": 21}
+    assert opera["checksum"] == "none"
+    assert opera["ack_enq"] is True and opera["ack_records"] is True
+    assert opera["pbx_to_pms_masks"] == ["STS", "RQINZ"]
+    assert set(opera["pms_to_pbx_masks"]) == {
+        "AREYUTHERE", "GRS", "END", "EDT", "DND", "CHK", "LNG", "LMT", "MOV",
+        "MSG", "MW", "NAM", "RST", "SDD", "STE", "VIP", "WKP",
+    }
     assert catalog["mitel-1-serial"]["name"] == "Mitel 1"
     assert catalog["mitel-2-serial"]["name"] == "Mitel 2"
     assert catalog["mitel-1-serial"]["protocol"] == "Mitel 1"

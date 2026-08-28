@@ -54,6 +54,8 @@ class InterfaceRuntime:
     responses: asyncio.Queue[int] = field(default_factory=asyncio.Queue)
     transaction_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     transaction_history: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=200))
+    client_tasks: set[asyncio.Task] = field(default_factory=set)
+    stopping: bool = False
 
     def capture(self, direction: str, data: bytes, *, peer: str | None = None, note: str | None = None) -> None:
         self.captures.append(CaptureRecord(
@@ -90,7 +92,7 @@ class InterfaceManager:
     @staticmethod
     def _build_engine(config: InterfaceConfig):
         protocol = config.protocol.upper()
-        if protocol in {"FIAS", "HILTON_PEP_FIAS"}:
+        if protocol in {"FIAS", "HILTON_PEP_FIAS", "OPERAIP_FIAS"}:
             provider = None
             if config.property_id:
                 property_id = config.property_id
@@ -98,6 +100,8 @@ class InterfaceManager:
             return FiasStateMachine(
                 role=str(config.options.get("role", "pms")),
                 sync_records_provider=provider,
+                ack_enq=bool(config.options.get("ack_enq", False)),
+                ack_records=bool(config.options.get("ack_records", False)),
             )
         if protocol in _TRANSACTIONAL_CA_PROTOCOLS:
             return CallAccountingStateMachine(
@@ -159,6 +163,7 @@ class InterfaceManager:
         if runtime.state not in {"stopped", "error"}:
             return
         runtime.last_error = None
+        runtime.stopping = False
         runtime.engine = self._build_engine(runtime.config)
         transport = runtime.config.transport
         if transport is TransportMode.TCP_SERVER:
@@ -174,10 +179,14 @@ class InterfaceManager:
 
     async def stop(self, name: str) -> None:
         runtime = self.get(name)
+        runtime.stopping = True
         if runtime.server:
             runtime.server.close()
-            await runtime.server.wait_closed()
             runtime.server = None
+            # Let already-accepted callbacks register so they are included in
+            # the client/task cleanup below. This remains non-blocking on the
+            # Windows proactor loop where Server.wait_closed can stall.
+            await asyncio.sleep(0)
         if runtime.task:
             runtime.task.cancel()
             try:
@@ -187,11 +196,14 @@ class InterfaceManager:
             runtime.task = None
         for writer in list(runtime.clients):
             writer.close()
-            try:
-                await writer.wait_closed()
-            except Exception:
-                pass
         runtime.clients.clear()
+        current = asyncio.current_task()
+        client_tasks = [task for task in runtime.client_tasks if task is not current]
+        for task in client_tasks:
+            task.cancel()
+        if client_tasks:
+            await asyncio.gather(*client_tasks, return_exceptions=True)
+        runtime.client_tasks.clear()
         if runtime.writer:
             runtime.writer.close()
             try:
@@ -349,6 +361,12 @@ class InterfaceManager:
         runtime.state = "starting"
 
         async def connected(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            if runtime.stopping:
+                writer.close()
+                return
+            task = asyncio.current_task()
+            if task:
+                runtime.client_tasks.add(task)
             runtime.clients.add(writer)
             peer = self._peer_name(writer)
             runtime.peer = peer
@@ -356,13 +374,11 @@ class InterfaceManager:
             try:
                 await self._reader_loop(runtime, reader, peer)
             finally:
+                if task:
+                    runtime.client_tasks.discard(task)
                 runtime.clients.discard(writer)
                 writer.close()
-                try:
-                    await writer.wait_closed()
-                except Exception:
-                    pass
-                if not runtime.clients:
+                if not runtime.clients and not runtime.stopping:
                     runtime.peer = None
                     runtime.state = "listening"
 

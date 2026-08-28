@@ -28,6 +28,8 @@ class FiasStateMachine:
     buffer: bytearray = field(default_factory=bytearray)
     current_frame: bytearray = field(default_factory=bytearray)
     in_frame: bool = False
+    ack_enq: bool = False
+    ack_records: bool = False
 
     def status(self) -> dict[str, str | int]:
         return {
@@ -40,6 +42,10 @@ class FiasStateMachine:
     def feed(self, data: bytes) -> list[EngineAction]:
         actions: list[EngineAction] = []
         for b in data:
+            if b == ENQ and not self.in_frame:
+                if self.ack_enq:
+                    actions.append(EngineAction(bytes((ACK,)), "FIAS ACK ENQ", apply_framing=False))
+                continue
             if b == STX and not self.in_frame:
                 self.in_frame = True
                 self.current_frame.clear()
@@ -49,6 +55,8 @@ class FiasStateMachine:
                     payload = bytes(self.current_frame).decode("ascii", errors="replace")
                     self.current_frame.clear()
                     self.in_frame = False
+                    if self.ack_records:
+                        actions.append(EngineAction(bytes((ACK,)), "FIAS ACK record", apply_framing=False))
                     actions.extend(self._handle_record(payload))
                 else:
                     self.current_frame.append(b)

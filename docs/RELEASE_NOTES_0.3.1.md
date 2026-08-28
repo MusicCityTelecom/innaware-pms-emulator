@@ -1,5 +1,19 @@
 # InnAware PMS Emulator 0.3.1 - Development Release Notes
 
+## Legacy Voiceware / OperaIP interoperability
+
+The built-in profile catalog now keeps three FIAS transport behaviors distinct:
+
+- Generic FIAS uses CRLF records.
+- Hilton/PEP FIAS retains its working STX/ETX and combined-name behavior.
+- Legacy OperaIP FIAS uses the field-observed ENQ/ACK handshake, STX/ETX framing,
+  no checksum, and explicit PMS/PBX message-mask metadata.
+
+TCP interface shutdown now closes and cancels active client sessions before the
+runtime is marked stopped. This also fixes deletion of an online interface and
+prevents a late disconnect callback from changing a stopped interface back to
+listening. The operator console suppresses duplicate Stop/Delete submissions.
+
 **Author:** Tommy Heggie
 
 0.3.1 is the planned second field-beta release following `v0.3.0-beta`.

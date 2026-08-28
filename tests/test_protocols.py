@@ -5,7 +5,7 @@ from innaware_pms_emulator.protocols.call_accounting import (
     HolidexAdapter,
     InnFormXLAdapter,
 )
-from innaware_pms_emulator.protocols.fias import FiasAdapter, HiltonPepFiasAdapter
+from innaware_pms_emulator.protocols.fias import FiasAdapter, HiltonPepFiasAdapter, OperaIpFiasAdapter
 from innaware_pms_emulator.protocols.legacy import OnQAdapter
 from innaware_pms_emulator.protocols.mitel import Mitel1Adapter, Mitel2Adapter
 from innaware_pms_emulator.protocols.registry import protocol_catalog
@@ -20,6 +20,13 @@ def test_hilton_fias_uses_combined_name_and_omits_gf():
     p = HiltonPepFiasAdapter().encode_event({"action": "checkin", "room": "101", "last_name": "LAST", "first_name": "FIRST"})
     assert p == b"GI|RN101|GNLAST, FIRST|\r\n"
     assert b"GF" not in p
+
+
+def test_operaip_uses_generic_fias_fields_without_changing_hilton_behavior():
+    p = OperaIpFiasAdapter().encode_event(
+        {"action": "checkin", "room": "101", "last_name": "TEST", "first_name": "GUEST"}
+    )
+    assert p == b"GI|RN101|GNTEST|GFGUEST|\r\n"
 
 
 def test_fias_room_move_uses_old_and_new_room_fields():

@@ -27,6 +27,22 @@ def test_fias_pms_answers_posting_request():
     assert b"PA|RN101|ASOK|P#77|" in actions[0].payload
 
 
+def test_operaip_fias_acknowledges_enq_and_each_complete_frame():
+    sm = FiasStateMachine(role="pms", ack_enq=True, ack_records=True)
+    actions = sm.feed(
+        bytes((ENQ, STX)) + b"LA|DA260827|TI220000|" + bytes((ETX, STX))
+        + b"GI|RN101|GNTEST, GUEST|" + bytes((ETX,))
+    )
+    assert [action.payload for action in actions] == [bytes((ACK,)), bytes((ACK,)), bytes((ACK,))]
+    assert all(action.apply_framing is False for action in actions)
+    assert sm.state == "active"
+
+
+def test_standard_fias_profiles_do_not_enable_legacy_control_ack_by_default():
+    sm = FiasStateMachine(role="pms")
+    assert sm.feed(bytes((ENQ,))) == []
+
+
 def test_fias_database_sync_includes_property_guest_records():
     sm = FiasStateMachine(
         role="pms",

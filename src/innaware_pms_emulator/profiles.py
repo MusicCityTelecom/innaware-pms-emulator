@@ -52,6 +52,28 @@ BUILTIN_PROFILES: dict[str, InterfaceProfile] = {
         },
         notes=["No legacy ENQ/ACK handshake is enabled by this profile."],
     ),
+    "operaip-fias-tcp-server": InterfaceProfile(
+        id="operaip-fias-tcp-server",
+        name="Legacy OperaIP FIAS - TCP Server",
+        purpose="pms",
+        protocol="OPERAIP_FIAS",
+        maturity="field-observed",
+        description="Voiceware-era OperaIP-compatible FIAS listener with the legacy control-byte handshake.",
+        defaults={
+            "transport": "tcp_server", "bind_host": "0.0.0.0", "port": 5001,
+            "options": {
+                "framing": "stx_etx", "role": "pms", "auto_ack": True,
+                "ack_enq": True, "ack_records": True, "checksum": "none",
+                "control_bytes": {"enq": 5, "ack": 6, "stx": 2, "etx": 3, "nak": 21},
+                "pms_to_pbx_masks": [
+                    "AREYUTHERE", "GRS", "END", "EDT", "DND", "CHK", "LNG", "LMT",
+                    "MOV", "MSG", "MW", "NAM", "RST", "SDD", "STE", "VIP", "WKP",
+                ],
+                "pbx_to_pms_masks": ["STS", "RQINZ"],
+            },
+        },
+        notes=["Keep this separate from CRLF FIAS and Hilton/PEP FIAS profiles."],
+    ),
     "mitel-1-serial": InterfaceProfile(
         id="mitel-1-serial",
         name="Mitel 1",

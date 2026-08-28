@@ -85,3 +85,9 @@ class HiltonPepFiasAdapter(FiasAdapter):
 
     def __init__(self):
         super().__init__(hilton=True)
+
+
+class OperaIpFiasAdapter(FiasAdapter):
+    """FIAS records carried by the legacy Opera-over-IP handshake."""
+
+    name = "OPERAIP_FIAS"
