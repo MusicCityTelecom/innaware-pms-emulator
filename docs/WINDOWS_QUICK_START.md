@@ -1,7 +1,7 @@
 # InnAware PMS Emulator - Windows Quick Start
 
 **Author:** Tommy Heggie  
-**Current development version:** 0.3.1
+**Current development version:** 0.3.2
 
 ## Install
 

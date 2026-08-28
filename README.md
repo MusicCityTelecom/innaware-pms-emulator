@@ -1,7 +1,7 @@
 # InnAware PMS Emulator
 
 **Author:** Tommy Heggie  
-**Current development version:** 0.3.1  
+**Current development version:** 0.3.2
 **Latest published field beta:** v0.3.0-beta  
 **Primary user platform:** Windows 10/11 x64  
 **Engineering/lab platform:** Linux / Debian
@@ -307,7 +307,7 @@ powershell -ExecutionPolicy Bypass `
 
 The builder runs the full Python test suite, creates the one-file/windowed EXE, launches the actual frozen EXE for a runtime smoke test, builds the installer when Inno Setup is available, and generates release ZIP/checksum artifacts.
 
-Expected 0.3.1 application outputs:
+Expected 0.3.2 application outputs:
 
 ```text
 dist-windows\InnAware-PMS-Emulator.exe
@@ -315,8 +315,8 @@ dist-windows\InnAware-PMS-Emulator-Setup.exe
 dist-windows\README-WINDOWS.txt
 dist-windows\SHA256SUMS.txt
 
-InnAware-PMS-Emulator-Windows-0.3.1.zip
-InnAware-PMS-Emulator-Source-0.3.1.zip
+InnAware-PMS-Emulator-Windows-0.3.2.zip
+InnAware-PMS-Emulator-Source-0.3.2.zip
 SHA256SUMS-WINDOWS-0.3.1.txt
 ```
 
@@ -391,7 +391,7 @@ The protocol engine is deliberately shared. A future WinUI/WinForms shell may im
 
 `v0.3.0-beta` passed the Linux/server laboratory regression gate and the actual Windows frozen-EXE/installer build gate.
 
-The 0.3.1 development line adds Mitel 1/2 and update infrastructure. It should remain prerelease until the complete CI matrix, server3 regression, frozen Windows build, installer test, and protocol-pack update test are completed for the final 0.3.1 commit.
+The 0.3.2 development line corrects protocol-pack update-state comparison while retaining the Mitel 1/2 and update infrastructure introduced in 0.3.1. It remains a field-beta prerelease.
 
 ## Safety
 

@@ -70,6 +70,38 @@ def test_update_check_selects_newer_prerelease(monkeypatch, tmp_path):
     assert status["app"]["asset"]["name"] == "InnAware-PMS-Emulator-Setup.exe"
 
 
+def test_installed_protocol_pack_with_same_github_digest_is_current(monkeypatch, tmp_path):
+    monkeypatch.setenv("INNAWARE_PMS_DATA_DIR", str(tmp_path))
+    digest = "a" * 64
+    packs = tmp_path / "protocol-packs"
+    packs.mkdir()
+    installed = packs / "2026.08.27.1"
+    installed.mkdir()
+    (installed / "protocol-pack.json").write_text(json.dumps({
+        "schema_version": 1, "pack_version": "2026.08.27.1", "profiles": [],
+    }), encoding="utf-8")
+    (packs / "active.json").write_text(json.dumps({
+        "pack_version": "2026.08.27.1",
+        "source_release": "v0.3.1",
+        "source_asset": "InnAware-PMS-Protocol-Pack-2026.08.27.1.zip",
+        "source_digest": digest,
+        "installed_at": "2026-08-28T04:18:39+00:00",
+    }), encoding="utf-8")
+    manager = UpdateManager(tmp_path / "updates")
+    monkeypatch.setattr(manager, "fetch_releases", lambda: [{
+        "tag_name": "v0.3.1", "draft": False, "prerelease": True,
+        "published_at": "2026-08-28T04:12:16Z", "assets": [{
+            "name": "InnAware-PMS-Protocol-Pack-2026.08.27.1.zip",
+            "digest": f"sha256:{digest}", "browser_download_url": "https://example.invalid/pack.zip",
+        }],
+    }])
+
+    status = manager.check("0.3.1", include_prereleases=True)
+
+    assert status["protocol_pack"]["local"]["installed"] is True
+    assert status["protocol_pack"]["update_available"] is False
+
+
 def test_protocol_pack_installs_data_only_profiles(monkeypatch, tmp_path):
     monkeypatch.setenv("INNAWARE_PMS_DATA_DIR", str(tmp_path))
     manager = UpdateManager(tmp_path / "updates")

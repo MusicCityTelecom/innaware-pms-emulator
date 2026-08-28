@@ -44,6 +44,14 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _sha256_value(value: Any) -> str | None:
+    """Normalize GitHub's sha256:<hex> form and stored bare digests."""
+    digest = str(value or "").strip().lower()
+    if digest.startswith("sha256:"):
+        digest = digest.split(":", 1)[1]
+    return digest if re.fullmatch(r"[0-9a-f]{64}", digest) else None
+
+
 def _safe_component(value: str) -> str:
     cleaned = "".join(ch for ch in str(value) if ch.isalnum() or ch in {".", "-", "_"}).strip("._-")
     if not cleaned:
@@ -245,13 +253,13 @@ class UpdateManager:
                     "published_at": release.get("published_at"),
                     "asset": self._public_asset(asset),
                 }
-                remote_digest = str(asset.get("digest") or "") or None
+                remote_digest = _sha256_value(asset.get("digest"))
                 pack_status = {
                     "local": local_pack,
                     "remote": remote,
                     "update_available": (
                         not local_pack["installed"]
-                        or local_pack.get("source_digest") != remote_digest
+                        or _sha256_value(local_pack.get("source_digest")) != remote_digest
                         or local_pack.get("source_asset") != asset.get("name")
                     ),
                 }
