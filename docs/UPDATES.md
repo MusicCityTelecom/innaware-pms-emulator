@@ -2,6 +2,20 @@
 
 InnAware PMS Emulator supports independent application and protocol-pack updates through the local **Update Center**.
 
+## Authoritative update source
+
+**GitHub is the authoritative source for InnAware PMS Emulator application updates, protocol-pack updates, release notes, checksums, and downloadable release artifacts.**
+
+The application update system reads releases only from:
+
+```text
+https://github.com/MusicCityTelecom/innaware-pms-emulator/releases
+```
+
+The support site at `https://support.innawareucp.com` is for help using and troubleshooting the application. It is **not** an application-update, protocol-pack, release-artifact, or release-metadata source.
+
+Development should flow through the repository and GitHub release process so the source tree, release metadata, protocol packs, packaged artifacts, and in-application updater remain aligned.
+
 ## Application updates
 
 The application checks the public GitHub Releases feed for `MusicCityTelecom/innaware-pms-emulator`.
@@ -16,22 +30,22 @@ If an installer is not present, the updater can identify the portable `InnAware-
 
 The Update Center can:
 
-1. check manually for a newer release;
+1. check manually for a newer GitHub release;
 2. check automatically in the background when the emulator starts;
 3. include or exclude prerelease/beta releases;
-4. download the selected release asset;
+4. download the selected GitHub release asset;
 5. verify its SHA-256 before it is accepted;
 6. launch the verified Windows installer.
 
-The application does **not** overwrite its own running one-file executable. It downloads the installer to the managed application-data update directory and launches the installer. Windows/Inno Setup then performs the actual application replacement.
+The application does **not** overwrite its own running one-file executable. It downloads the installer from the selected GitHub release to the managed application-data update directory and launches the installer. Windows/Inno Setup then performs the actual application replacement.
 
 ### Verification
 
-The updater prefers the SHA-256 digest published by GitHub for the release asset. If GitHub does not expose an asset digest, the updater looks for `SHA256SUMS.txt` in the same release and matches the exact asset filename. A download without a verifiable SHA-256 is rejected.
+The updater prefers the SHA-256 digest published by GitHub for the release asset. If GitHub does not expose an asset digest, the updater looks for `SHA256SUMS.txt` in the same GitHub release and matches the exact asset filename. A download without a verifiable SHA-256 is rejected.
 
 ## Protocol / stub packs
 
-Data-only protocol packs can be distributed independently of the executable.
+Data-only protocol packs can be distributed independently of the executable, but they are also published and discovered through the same GitHub Releases feed.
 
 Release asset naming:
 
@@ -99,14 +113,15 @@ The main operator screen also exposes an **Updates** button.
 
 The Update Center shows:
 
-- application version/release state;
-- installed and remote protocol-pack state;
+- application version/release state from GitHub Releases;
+- installed and remote protocol-pack state from GitHub Releases;
 - automatic-check settings;
 - anonymous usage telemetry preference;
 - the local random installation UUID for troubleshooting;
 - current protocol-pack version;
 - privacy documentation;
-- support email and website links.
+- a direct GitHub Releases link;
+- support email and website links for user help.
 
 ## Defaults
 
@@ -136,6 +151,8 @@ See [`PRIVACY_TELEMETRY.md`](PRIVACY_TELEMETRY.md) for the exact event behavior 
 
 Email: **support@innawareucp.com**  
 Website: **https://support.innawareucp.com**
+
+These support channels are for help using and troubleshooting the application. They are not update-distribution endpoints; release downloads and update metadata remain on GitHub.
 
 ## Privacy and scope
 
