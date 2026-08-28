@@ -5,8 +5,8 @@ from innaware_pms_emulator.protocols.call_accounting import (
     HolidexAdapter,
     InnFormXLAdapter,
 )
-from innaware_pms_emulator.protocols.fias import FiasAdapter, HiltonPepFiasAdapter, OperaIpFiasAdapter
-from innaware_pms_emulator.protocols.legacy import OnQAdapter
+from innaware_pms_emulator.protocols.fias import FiasAdapter, HiltonPepFiasAdapter
+from innaware_pms_emulator.protocols.legacy import OnQAdapter, OperaIpAdapter
 from innaware_pms_emulator.protocols.mitel import Mitel1Adapter, Mitel2Adapter
 from innaware_pms_emulator.protocols.registry import protocol_catalog
 
@@ -22,11 +22,17 @@ def test_hilton_fias_uses_combined_name_and_omits_gf():
     assert b"GF" not in p
 
 
-def test_operaip_uses_generic_fias_fields_without_changing_hilton_behavior():
-    p = OperaIpFiasAdapter().encode_event(
+def test_operaip_uses_legacy_voiceware_checkin_command():
+    p = OperaIpAdapter().encode_event(
         {"action": "checkin", "room": "101", "last_name": "TEST", "first_name": "GUEST"}
     )
-    assert p == b"GI|RN101|GNTEST|GFGUEST|\r\n"
+    assert p.startswith(b"CHK1 101  TEST,GUEST")
+    assert not p.startswith(b"GI|")
+
+
+def test_operaip_accepts_console_move_action():
+    p = OperaIpAdapter().encode_event({"action": "move", "room": "101", "new_room": "202"})
+    assert p == b"MOV4 101   202  "
 
 
 def test_fias_room_move_uses_old_and_new_room_fields():

@@ -29,7 +29,7 @@ class LegacyHotelAdapter:
         if action in ("name", "name_update"):
             name = f'{event.get("last_name","")},{event.get("first_name","")}'[:20].ljust(20)
             return f"NAM3 {name}{room}".encode("ascii", "replace")
-        if action == "room_move":
+        if action in ("move", "room_move"):
             return f"MOV4 {room} {self._room(event.get('new_room',''))}".encode("ascii")
         if action == "wakeup_set":
             return f"WKP{event.get('wakeup_time','0000')[:4]} {room}".encode("ascii")
@@ -72,3 +72,9 @@ class ChoiceAdvantageAdapter(LegacyHotelAdapter):
 
 class OperaLegacyAdapter(LegacyHotelAdapter):
     def __init__(self): super().__init__("OPERA_LEGACY")
+
+
+class OperaIpAdapter(LegacyHotelAdapter):
+    """Voiceware-era OperaIP command payloads over ENQ/ACK + STX/ETX."""
+
+    def __init__(self): super().__init__("OPERAIP_FIAS")

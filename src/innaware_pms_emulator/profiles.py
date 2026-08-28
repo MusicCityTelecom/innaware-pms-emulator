@@ -58,7 +58,7 @@ BUILTIN_PROFILES: dict[str, InterfaceProfile] = {
         purpose="pms",
         protocol="OPERAIP_FIAS",
         maturity="field-observed",
-        description="Voiceware-era OperaIP-compatible FIAS listener with the legacy control-byte handshake.",
+        description="Voiceware-era OperaIP CHK/NAM/MOV/WKP listener with the legacy control-byte handshake.",
         defaults={
             "transport": "tcp_server", "bind_host": "0.0.0.0", "port": 5001,
             "options": {

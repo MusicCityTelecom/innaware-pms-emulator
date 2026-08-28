@@ -5,8 +5,8 @@ from .call_accounting import (
     HolidexAdapter,
     InnFormXLAdapter,
 )
-from .fias import FiasAdapter, HiltonPepFiasAdapter, OperaIpFiasAdapter
-from .legacy import ChoiceAdvantageAdapter, OnQAdapter, OperaLegacyAdapter
+from .fias import FiasAdapter, HiltonPepFiasAdapter
+from .legacy import ChoiceAdvantageAdapter, OnQAdapter, OperaIpAdapter, OperaLegacyAdapter
 from .mitel import Mitel1Adapter, Mitel2Adapter
 
 
@@ -16,7 +16,7 @@ def build_registry():
     return {
         "FIAS": FiasAdapter(),
         "HILTON_PEP_FIAS": HiltonPepFiasAdapter(),
-        "OPERAIP_FIAS": OperaIpFiasAdapter(),
+        "OPERAIP_FIAS": OperaIpAdapter(),
         "MITEL 1": mitel_1,
         "MITEL 2": mitel_2,
         # Historical/internal aliases are retained only so old saved emulator
@@ -77,7 +77,7 @@ PROTOCOL_METADATA = {
     },
     "OPERAIP_FIAS": {
         "maturity": "field-observed",
-        "description": "Legacy OperaIP-compatible FIAS transport using ENQ/ACK and STX/ETX without a checksum.",
+        "description": "Voiceware-era OperaIP fixed-command payloads (CHK/NAM/MOV/WKP) using ENQ/ACK and STX/ETX without a checksum.",
         "recommended": {
             "framing": "stx_etx", "role": "pms", "auto_ack": True,
             "ack_enq": True, "ack_records": True, "checksum": "none",
