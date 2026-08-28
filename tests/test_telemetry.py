@@ -36,6 +36,8 @@ def test_first_run_creates_uuid_and_sends_install_then_run(tmp_path):
     result = service.run_once("0.3.6", enabled=True)
 
     assert result["attempted"] == ["install", "run"]
+    assert result["delivered"] == ["install", "run"]
+    assert result["error"] is None
     assert [item["event"] for item in payloads] == ["install", "run"]
     install_id = payloads[0]["install_id"]
     assert uuid.UUID(install_id).version == 4
@@ -92,7 +94,7 @@ def test_disabled_telemetry_makes_no_requests(tmp_path):
         TimeoutError("timeout"),
     ],
 )
-def test_network_failures_never_break_startup_or_retry_install(tmp_path, failure):
+def test_network_failures_never_break_startup_and_retry_install(tmp_path, failure):
     calls = []
 
     def failing(payload):
@@ -106,8 +108,10 @@ def test_network_failures_never_break_startup_or_retry_install(tmp_path, failure
 
     calls.clear()
     second = service.run_once("0.3.6", enabled=True)
-    assert second["attempted"] == ["run"]
-    assert calls == ["run"]
+    assert second["attempted"] == ["install", "run"]
+    assert second["delivered"] == []
+    assert second["error"]
+    assert calls == ["install", "run"]
 
 
 def test_corrupt_state_recreates_random_uuid_and_install_event(tmp_path):
@@ -119,7 +123,46 @@ def test_corrupt_state_recreates_random_uuid_and_install_event(tmp_path):
     assert uuid.UUID(result["install_id"]).version == 4
     state = json.loads((tmp_path / "telemetry.json").read_text(encoding="utf-8"))
     assert state["install_id"] == result["install_id"]
-    assert state["install_event_attempted"] is True
+    assert state["install_event_sent"] is True
+
+
+def test_install_is_only_marked_sent_after_endpoint_acknowledges(tmp_path):
+    responses = iter([False, True, True, True])
+    service = TelemetryService(tmp_path, post_func=lambda payload: next(responses))
+    first = service.run_once("0.3.7", enabled=True)
+    assert first["delivered"] == ["run"]
+    assert json.loads((tmp_path / "telemetry.json").read_text(encoding="utf-8"))["install_event_sent"] is False
+
+    second = service.run_once("0.3.7", enabled=True)
+    assert second["delivered"] == ["install", "run"]
+    assert json.loads((tmp_path / "telemetry.json").read_text(encoding="utf-8"))["install_event_sent"] is True
+
+
+def test_036_attempted_state_migrates_to_unsent_and_retries(tmp_path):
+    install_id = str(uuid.uuid4())
+    (tmp_path / "telemetry.json").write_text(json.dumps({
+        "install_id": install_id,
+        "install_event_attempted": True,
+    }), encoding="utf-8")
+    events = []
+    service = TelemetryService(tmp_path, post_func=lambda payload: events.append(payload["event"]) or True)
+    result = service.run_once("0.3.7", enabled=True)
+    assert result["attempted"] == ["install", "run"]
+    assert events == ["install", "run"]
+    state = json.loads((tmp_path / "telemetry.json").read_text(encoding="utf-8"))
+    assert state["install_event_sent"] is True
+    assert "install_event_attempted" not in state
+
+
+def test_public_status_includes_delivery_diagnostics(tmp_path):
+    service = TelemetryService(tmp_path, post_func=lambda payload: False)
+    service.run_once("0.3.7", enabled=True)
+    status = service.public_status("0.3.7", enabled=True)
+    assert status["install_event_sent"] is False
+    assert status["last_attempt_at"]
+    assert status["last_success_at"] is None
+    assert "endpoint rejected" in status["last_error"]
+    assert status["endpoint"].endswith("/pms-telemetry-ingest.php")
 
 
 def test_payload_contains_no_sensitive_or_extra_fields(tmp_path):

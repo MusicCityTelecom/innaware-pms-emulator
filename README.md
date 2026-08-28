@@ -1,7 +1,7 @@
 # InnAware PMS Emulator
 
 **Author:** Tommy Heggie  
-**Current development version:** 0.3.6  
+**Current development version:** 0.3.7
 **Latest published field beta:** v0.3.0-beta  
 **Primary user platform:** Windows 10/11 x64  
 **Engineering/lab platform:** Linux / Debian
@@ -91,10 +91,10 @@ Telemetry is best-effort, asynchronous, short-timeout, and never blocks applicat
 The production endpoint is:
 
 ```text
-https://telemetry.innawareucp.com/pms-telemetry.php
+https://telemetry.innawareucp.com/pms-telemetry-ingest.php
 ```
 
-On the first telemetry-enabled run, the emulator generates a random UUID-v4 and attempts one `install` event plus one `run` event. Later telemetry-enabled launches reuse that UUID and attempt one `run` event only.
+On the first telemetry-enabled run, the emulator generates a random UUID-v4 and sends one `install` event plus one `run` event. The install event is retried on later launches until the endpoint confirms delivery; later launches reuse the UUID and send one `run` event. The Update Center shows the most recent delivery result.
 
 The outbound JSON body contains only:
 
@@ -303,7 +303,7 @@ powershell -ExecutionPolicy Bypass `
 
 The builder runs the full Python test suite, creates the one-file/windowed EXE, embeds the canonical protocol-pack manifest, launches the actual frozen EXE for a runtime smoke test with telemetry disabled, builds the installer when Inno Setup is available, copies the privacy document, and generates release ZIP/checksum artifacts.
 
-Expected 0.3.6 application outputs:
+Expected 0.3.7 application outputs:
 
 ```text
 dist-windows\InnAware-PMS-Emulator.exe
@@ -312,9 +312,9 @@ dist-windows\README-WINDOWS.txt
 dist-windows\PRIVACY-TELEMETRY.md
 dist-windows\SHA256SUMS.txt
 
-InnAware-PMS-Emulator-Windows-0.3.6.zip
-InnAware-PMS-Emulator-Source-0.3.6.zip
-SHA256SUMS-WINDOWS-0.3.6.txt
+InnAware-PMS-Emulator-Windows-0.3.7.zip
+InnAware-PMS-Emulator-Source-0.3.7.zip
+SHA256SUMS-WINDOWS-0.3.7.txt
 ```
 
 Build the independent protocol pack with:
@@ -382,7 +382,7 @@ The protocol engine is deliberately shared. A future WinUI/WinForms shell may im
 
 `v0.3.0-beta` passed the Linux/server laboratory regression gate and the actual Windows frozen-EXE/installer build gate.
 
-The 0.3.6 development line adds auditable anonymous telemetry, active protocol-pack reporting, Update Center/support improvements, and release packaging changes while retaining the protocol and Windows-upgrade improvements from 0.3.5. It remains a field-beta prerelease until the normal Windows build/install gates are completed for this version.
+The 0.3.7 development line corrects telemetry delivery by separating public ingestion from the protected dashboard, retrying unacknowledged install events, migrating 0.3.6 telemetry state, and surfacing delivery diagnostics. It remains a field-beta prerelease until the normal Windows build/install gates are completed for this version.
 
 ## Safety
 

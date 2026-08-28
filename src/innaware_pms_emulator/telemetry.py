@@ -8,6 +8,7 @@ import threading
 import urllib.error
 import urllib.request
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -15,7 +16,7 @@ from .protocol_packs import current_protocol_pack_version
 from .storage import data_dir
 
 
-TELEMETRY_ENDPOINT = "https://telemetry.innawareucp.com/pms-telemetry.php"
+TELEMETRY_ENDPOINT = "https://telemetry.innawareucp.com/pms-telemetry-ingest.php"
 TELEMETRY_TIMEOUT_SECONDS = 2.5
 _ALLOWED_PAYLOAD_FIELDS = {
     "event",
@@ -82,7 +83,10 @@ class TelemetryService:
     def _new_state(self) -> dict[str, Any]:
         return {
             "install_id": str(uuid.uuid4()),
-            "install_event_attempted": False,
+            "install_event_sent": False,
+            "last_attempt_at": None,
+            "last_success_at": None,
+            "last_error": None,
         }
 
     def _write_state(self, state: dict[str, Any]) -> None:
@@ -98,9 +102,16 @@ class TelemetryService:
                     raw = json.loads(self.state_path.read_text(encoding="utf-8"))
                     install_id = self._valid_uuid4(raw.get("install_id")) if isinstance(raw, dict) else None
                     if install_id:
+                        # 0.3.6 recorded an attempt before network I/O. It could
+                        # not distinguish a delivered event from a rejected one,
+                        # so migrate those installations as unsent and retry.
+                        install_sent = bool(raw.get("install_event_sent", False))
                         state = {
                             "install_id": install_id,
-                            "install_event_attempted": bool(raw.get("install_event_attempted", False)),
+                            "install_event_sent": install_sent,
+                            "last_attempt_at": raw.get("last_attempt_at"),
+                            "last_success_at": raw.get("last_success_at"),
+                            "last_error": raw.get("last_error"),
                         }
                 except (OSError, json.JSONDecodeError):
                     state = None
@@ -152,20 +163,32 @@ class TelemetryService:
             return False
         return isinstance(result, dict) and result.get("ok") is True
 
-    def _send_safely(self, payload: dict[str, str]) -> bool:
+    def _send_safely(self, payload: dict[str, str]) -> tuple[bool, str | None]:
         try:
-            return self._post(payload)
+            delivered = self._post(payload)
+            return delivered, None if delivered else "endpoint rejected the event"
+        except urllib.error.HTTPError as exc:
+            message = f"HTTP {exc.code}"
+            _LOG.warning("Telemetry %s event failed: %s", payload.get("event"), message)
+            return False, message
         except (urllib.error.URLError, TimeoutError, ssl.SSLError, OSError, ValueError) as exc:
-            _LOG.debug("Telemetry %s event skipped: %s", payload.get("event"), exc)
-            return False
+            message = str(getattr(exc, "reason", exc))[:200]
+            _LOG.warning("Telemetry %s event failed: %s", payload.get("event"), message)
+            return False, message
         except Exception as exc:
-            _LOG.debug("Telemetry %s event skipped: %s", payload.get("event"), exc)
-            return False
+            message = str(exc)[:200] or type(exc).__name__
+            _LOG.warning("Telemetry %s event failed: %s", payload.get("event"), message)
+            return False, message
+
+    @staticmethod
+    def _utc_now() -> str:
+        return datetime.now(timezone.utc).isoformat()
 
     def run_once(self, app_version: str, *, enabled: bool) -> dict[str, Any]:
         state = self.load_or_create_state()
         install_id = state["install_id"]
         attempted: list[str] = []
+        delivered: list[str] = []
         if not enabled:
             return {
                 "enabled": False,
@@ -173,24 +196,38 @@ class TelemetryService:
                 "attempted": attempted,
             }
 
-        if not state.get("install_event_attempted", False):
-            # Persist the one-shot decision before network I/O. Even if the server
-            # is unreachable, later launches must not keep re-sending install.
-            state["install_event_attempted"] = True
-            try:
-                with self._lock:
-                    self._write_state(state)
-            except OSError:
-                pass
+        errors: list[str] = []
+        state["last_attempt_at"] = self._utc_now()
+
+        if not state.get("install_event_sent", False):
             attempted.append("install")
-            self._send_safely(self._payload("install", app_version, install_id))
+            ok, error = self._send_safely(self._payload("install", app_version, install_id))
+            if ok:
+                delivered.append("install")
+                state["install_event_sent"] = True
+                state["last_success_at"] = self._utc_now()
+            elif error:
+                errors.append(f"install: {error}")
 
         attempted.append("run")
-        self._send_safely(self._payload("run", app_version, install_id))
+        ok, error = self._send_safely(self._payload("run", app_version, install_id))
+        if ok:
+            delivered.append("run")
+            state["last_success_at"] = self._utc_now()
+        elif error:
+            errors.append(f"run: {error}")
+        state["last_error"] = "; ".join(errors) if errors else None
+        try:
+            with self._lock:
+                self._write_state(state)
+        except OSError:
+            pass
         return {
             "enabled": True,
             "install_id": install_id,
             "attempted": attempted,
+            "delivered": delivered,
+            "error": state["last_error"],
         }
 
     def start_background(self, app_version: str, *, enabled: bool) -> None:
@@ -210,7 +247,10 @@ class TelemetryService:
         return {
             "enabled": bool(enabled),
             "install_id": state["install_id"],
-            "install_event_attempted": bool(state.get("install_event_attempted", False)),
+            "install_event_sent": bool(state.get("install_event_sent", False)),
+            "last_attempt_at": state.get("last_attempt_at"),
+            "last_success_at": state.get("last_success_at"),
+            "last_error": state.get("last_error"),
             "version": str(app_version),
             "platform": runtime_platform(),
             "architecture": runtime_architecture(),

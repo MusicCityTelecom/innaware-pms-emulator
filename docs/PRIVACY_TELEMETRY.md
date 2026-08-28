@@ -13,7 +13,7 @@ When disabled, the emulator makes no telemetry requests. The emulator remains fu
 Telemetry is sent with HTTPS POST requests to:
 
 ```text
-https://telemetry.innawareucp.com/pms-telemetry.php
+https://telemetry.innawareucp.com/pms-telemetry-ingest.php
 ```
 
 Normal TLS certificate validation remains enabled.
@@ -28,7 +28,7 @@ If the local telemetry state is deleted or becomes unreadable, a new random UUID
 
 ## Events
 
-On the first telemetry-enabled run, the emulator attempts one `install` event and one `run` event. The install event is a one-shot attempt and is not retried on later launches if the endpoint was unavailable.
+On the first telemetry-enabled run, the emulator attempts one `install` event and one `run` event. The install event is marked delivered only after the endpoint returns a successful acknowledgement. If delivery fails, the install event is retried on later telemetry-enabled launches until acknowledged.
 
 Every later telemetry-enabled application run attempts one `run` event.
 
@@ -52,7 +52,7 @@ Example:
 ```json
 {
   "event": "run",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "platform": "windows",
   "architecture": "x64",
   "protocol_pack_version": "2026.08.27.1",
