@@ -43,6 +43,10 @@ jobs:
           $version = python -c "import sys; sys.path.insert(0,'src'); import innaware_pms_emulator; print(innaware_pms_emulator.__version__)"
           "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      - name: Build sanitized protocol pack
+        shell: pwsh
+        run: python scripts/build-protocol-pack.py
+
       - name: Upload Windows product artifact
         uses: actions/upload-artifact@v4
         with:
@@ -55,6 +59,8 @@ jobs:
             InnAware-PMS-Emulator-Windows-${{ env.APP_VERSION }}.zip
             InnAware-PMS-Emulator-Source-${{ env.APP_VERSION }}.zip
             SHA256SUMS-WINDOWS-${{ env.APP_VERSION }}.txt
+            InnAware-PMS-Protocol-Pack-*.zip
+            InnAware-PMS-Protocol-Pack-*.sha256.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -79,4 +85,7 @@ jobs:
             dist-windows/InnAware-PMS-Emulator.exe
             InnAware-PMS-Emulator-Windows-${{ env.APP_VERSION }}.zip
             InnAware-PMS-Emulator-Source-${{ env.APP_VERSION }}.zip
+            dist-windows/SHA256SUMS.txt
             SHA256SUMS-WINDOWS-${{ env.APP_VERSION }}.txt
+            InnAware-PMS-Protocol-Pack-*.zip
+            InnAware-PMS-Protocol-Pack-*.sha256.txt

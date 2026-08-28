@@ -61,6 +61,7 @@ InnAware-PMS-Emulator-Windows-0.3.1.zip
 InnAware-PMS-Emulator-Source-0.3.1.zip
 SHA256SUMS.txt
 InnAware-PMS-Protocol-Pack-2026.08.27.1.zip
+InnAware-PMS-Protocol-Pack-2026.08.27.1.sha256.txt
 ```
 
 The exact protocol-pack version may be incremented again if more sanitized stubs are added before the release is published.
