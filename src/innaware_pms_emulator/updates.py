@@ -12,6 +12,7 @@ import urllib.error
 import urllib.request
 import zipfile
 from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -38,6 +39,14 @@ def version_tuple(value: str) -> tuple[int, int, int]:
     if not match:
         return (0, 0, 0)
     return tuple(int(part) for part in match.groups())  # type: ignore[return-value]
+
+
+def runtime_app_version() -> str:
+    """Return the version of the package that is actually running."""
+    try:
+        return package_version("innaware-pms-emulator")
+    except PackageNotFoundError:
+        return "0.0.0"
 
 
 def utc_now() -> str:
@@ -98,7 +107,15 @@ class UpdateManager:
         self._write_json(self.settings_path, settings)
         return settings
 
-    def load_status(self) -> dict[str, Any]:
+    def load_status(self, current_version: str | None = None) -> dict[str, Any]:
+        """Load cached update data while binding it to the running application.
+
+        The remote release information is safe to cache, but the installed
+        application version is runtime state. A cached status file can survive
+        an upgrade or rollback, so never trust its current_version or its
+        derived update_available flag when rendering the Update Center.
+        """
+        running_version = str(current_version or runtime_app_version())
         if not self.status_path.exists():
             return {
                 "checked_at": None,
@@ -116,6 +133,15 @@ class UpdateManager:
                 "protocol_pack": self._protocol_pack_local_status(),
             }
         if isinstance(raw, dict):
+            app_status = raw.get("app")
+            if isinstance(app_status, dict):
+                app_status = dict(app_status)
+                latest_tag = str(app_status.get("latest_tag") or "")
+                latest_version = version_tuple(latest_tag)
+                app_status["current_version"] = running_version
+                app_status["latest_version"] = ".".join(str(part) for part in latest_version)
+                app_status["update_available"] = latest_version > version_tuple(running_version)
+                raw["app"] = app_status
             raw["protocol_pack_local"] = self._protocol_pack_local_status()
             return raw
         return {"checked_at": None, "error": "Invalid stored update status"}
