@@ -19,11 +19,11 @@ The installer defaults to a per-user installation under:
 
 ### Portable distribution
 
-1. Download `InnAware-PMS-Emulator-Windows-<version>.zip`.
+1. Download `InnAware-PMS-Emulator-Windows-0.3.7.zip` from the current release.
 2. Extract it to a writable folder.
 3. Run `InnAware-PMS-Emulator.exe`.
 
-Python is not required to run either packaged distribution. Installer and portable builds use the same persistent application-data location, so normal application upgrades retain settings and the installation UUID.
+Python is not required to run either packaged distribution. Installer and portable builds use the same persistent application-data location, so normal application upgrades retain settings and local application state.
 
 ## First launch
 
@@ -42,31 +42,6 @@ The management interface listens on localhost only by default:
 ```
 
 PMS and call-accounting test interfaces are configured separately and may listen on LAN addresses when required.
-
-## Anonymous usage statistics
-
-0.3.6 and later include anonymous usage telemetry. It is enabled by default and can be turned off from:
-
-**Updates > Preferences > Send anonymous usage statistics**
-
-The Update Center also displays the randomly generated installation UUID so support can confirm which anonymous installation record is being discussed.
-
-Telemetry is asynchronous, short-timeout, best-effort, and does not prevent the emulator from starting or working offline. When disabled, no telemetry request is made.
-
-The telemetry JSON contains only:
-
-```text
-event
-version
-platform
-architecture
-protocol_pack_version
-install_id
-```
-
-The UUID is randomly generated and is not derived from Windows, hardware, network, or user identifiers. PMS traffic, hotel/property information, credentials, guest/room information, telephone numbers, call records, and network configuration are not included in telemetry JSON.
-
-See `PRIVACY-TELEMETRY.md` in packaged Windows distributions or [`PRIVACY_TELEMETRY.md`](PRIVACY_TELEMETRY.md) in the source tree.
 
 ## Basic test workflow
 
@@ -106,9 +81,19 @@ When a PMS/call-accounting interface listens on a LAN address, Windows Defender 
 
 ## Updates and protocol packs
 
-Open **Updates** from the main operator window. The Update Center can check for application releases and independent data-only protocol packs, display the currently loaded protocol-pack version, show the telemetry UUID/preference, and provide support links.
+Open **Updates** from the main operator window. The Update Center can check for application releases and independent data-only protocol packs, display the currently loaded protocol-pack version, and provide support links.
 
 Application and protocol-pack downloads are SHA-256 verified before use. Application installation remains an explicit user action.
+
+For 0.3.7, a successful update check should report:
+
+```text
+Installed: 0.3.7
+Latest:   v0.3.7
+Status:   Current
+```
+
+If an older installed version is running, the Update Center should instead report **Update available** whenever the selected GitHub release version is newer.
 
 ## Support
 
