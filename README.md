@@ -1,8 +1,8 @@
 # InnAware PMS Emulator
 
 **Author:** Tommy Heggie  
-**Current development version:** 0.3.7
-**Latest published field beta:** v0.3.0-beta  
+**Current development version:** 0.3.7  
+**Latest published field beta:** v0.3.7  
 **Primary user platform:** Windows 10/11 x64  
 **Engineering/lab platform:** Linux / Debian
 
@@ -74,44 +74,11 @@ The Update Center can:
 - launch the verified Windows installer;
 - independently check for and install data-only protocol/stub packs;
 - show the active protocol-pack version;
-- manage anonymous usage telemetry;
-- display the local random installation UUID for troubleshooting;
 - provide direct support email and website links.
 
 Automatic **installation** is deliberately disabled. The program may check automatically, but downloading/installing remains an explicit user action.
 
 See [`docs/UPDATES.md`](docs/UPDATES.md) for the release/update contract.
-
-## Anonymous usage telemetry
-
-Beginning with 0.3.6, anonymous usage statistics are enabled by default and can be disabled from **Update Center > Preferences > Send anonymous usage statistics**.
-
-Telemetry is best-effort, asynchronous, short-timeout, and never blocks application startup or normal offline operation. When disabled, the application makes no telemetry requests.
-
-The production endpoint is:
-
-```text
-https://telemetry.innawareucp.com/pms-telemetry-ingest.php
-```
-
-On the first telemetry-enabled run, the emulator generates a random UUID-v4 and sends one `install` event plus one `run` event. The install event is retried on later launches until the endpoint confirms delivery; later launches reuse the UUID and send one `run` event. The Update Center shows the most recent delivery result.
-
-The outbound JSON body contains only:
-
-```text
-event
-version
-platform
-architecture
-protocol_pack_version
-install_id
-```
-
-The UUID is randomly generated and is not derived from a MAC address, hostname, username, Windows SID, machine GUID, hardware serial, IP address, or other machine identifier. The application does not put PMS data, hotel/property data, credentials, guest/room data, telephone numbers, call records, network configuration, license keys, or user filesystem paths into telemetry JSON.
-
-The currently loaded protocol-pack version is read from the actual active pack metadata, falling back to the bundled canonical `protocol-pack.json`. If a protocol pack is updated independently, the next application run reports that new pack version.
-
-The complete auditable privacy contract is in [`docs/PRIVACY_TELEMETRY.md`](docs/PRIVACY_TELEMETRY.md), and the implementation is intentionally visible in `src/innaware_pms_emulator/telemetry.py`.
 
 ## Support
 
@@ -151,7 +118,7 @@ python scripts/build-protocol-pack.py
 7. Generate check-ins, check-outs, room moves, wakeups, room-state changes, or call records.
 8. Inspect the live RX/TX capture and protocol state.
 9. Export captures or generate a support bundle when troubleshooting.
-10. Use **Updates** to check application/protocol-pack status, telemetry preference, and support information.
+10. Use **Updates** to check application/protocol-pack status and support information.
 
 ## Built-in technician profiles
 
@@ -301,7 +268,7 @@ powershell -ExecutionPolicy Bypass `
   -Python py
 ```
 
-The builder runs the full Python test suite, creates the one-file/windowed EXE, embeds the canonical protocol-pack manifest, launches the actual frozen EXE for a runtime smoke test with telemetry disabled, builds the installer when Inno Setup is available, copies the privacy document, and generates release ZIP/checksum artifacts.
+The builder runs the full Python test suite, creates the one-file/windowed EXE, embeds the canonical protocol-pack manifest, launches the actual frozen EXE for a runtime smoke test, builds the installer when Inno Setup is available, and generates release ZIP/checksum artifacts.
 
 Expected 0.3.7 application outputs:
 
@@ -309,7 +276,6 @@ Expected 0.3.7 application outputs:
 dist-windows\InnAware-PMS-Emulator.exe
 dist-windows\InnAware-PMS-Emulator-Setup.exe
 dist-windows\README-WINDOWS.txt
-dist-windows\PRIVACY-TELEMETRY.md
 dist-windows\SHA256SUMS.txt
 
 InnAware-PMS-Emulator-Windows-0.3.7.zip
@@ -382,7 +348,7 @@ The protocol engine is deliberately shared. A future WinUI/WinForms shell may im
 
 `v0.3.0-beta` passed the Linux/server laboratory regression gate and the actual Windows frozen-EXE/installer build gate.
 
-The 0.3.7 development line corrects telemetry delivery by separating public ingestion from the protected dashboard, retrying unacknowledged install events, migrating 0.3.6 telemetry state, and surfacing delivery diagnostics. It remains a field-beta prerelease until the normal Windows build/install gates are completed for this version.
+The 0.3.7 line is the current field-beta release and includes corrected update-version state handling plus synchronized package, installer, release-tag, and release-manifest metadata.
 
 ## Safety
 
