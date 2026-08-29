@@ -16,6 +16,20 @@ The support site at `https://support.innawareucp.com` is for help using and trou
 
 Development should flow through the repository and GitHub release process so the source tree, release metadata, protocol packs, packaged artifacts, and in-application updater remain aligned.
 
+## Canonical release metadata
+
+The source tree contains `release-manifest.json`. It records the application version, release tag, release channel, protocol-pack version, repository, and authoritative update source for the release being prepared.
+
+For the current release it must agree with `pyproject.toml` and `protocol-pack.json`:
+
+```text
+application version: 0.3.7
+release tag:         v0.3.7
+protocol pack:       2026.08.27.1
+```
+
+The automated test suite verifies this alignment before a release is published.
+
 ## Application updates
 
 The application checks the public GitHub Releases feed for `MusicCityTelecom/innaware-pms-emulator`.
@@ -38,6 +52,19 @@ The Update Center can:
 6. launch the verified Windows installer.
 
 The application does **not** overwrite its own running one-file executable. It downloads the installer from the selected GitHub release to the managed application-data update directory and launches the installer. Windows/Inno Setup then performs the actual application replacement.
+
+### Installed/latest version state
+
+Remote release information may be cached between runs, but the installed version is always derived from the application package that is actually running. When cached update status is loaded, the Update Center replaces any cached installed-version value with the running version and recomputes whether an update is available.
+
+This prevents contradictory status such as showing an older installed version while simultaneously claiming that the newer release is already current.
+
+For example:
+
+```text
+Installed 0.3.6 + Latest v0.3.7 = Update available
+Installed 0.3.7 + Latest v0.3.7 = Current
+```
 
 ### Verification
 
@@ -82,8 +109,6 @@ New protocol parsers, state machines, framing logic, transports, or other execut
 
 The running application resolves its protocol-pack version from the active installed pack's manifest. If no independently installed pack is active, it uses the bundled canonical repository `protocol-pack.json` embedded in the Windows build.
 
-This same canonical value is shown in the Update Center and reported by anonymous usage telemetry. Updating a protocol pack independently therefore changes the version reported on the next application run without requiring an executable update.
-
 ## Building a protocol pack
 
 From the repository root:
@@ -116,10 +141,7 @@ The Update Center shows:
 - application version/release state from GitHub Releases;
 - installed and remote protocol-pack state from GitHub Releases;
 - automatic-check settings;
-- anonymous usage telemetry preference;
-- the local random installation UUID for troubleshooting;
 - current protocol-pack version;
-- privacy documentation;
 - a direct GitHub Releases link;
 - support email and website links for user help.
 
@@ -130,22 +152,15 @@ The defaults are:
 - application update check on startup: enabled;
 - protocol-pack update check on startup: enabled;
 - include prereleases: enabled during the field-beta line;
-- anonymous usage statistics: enabled;
 - automatic application installation: disabled.
 
 Checks run in the background and never block normal emulator startup. Downloads/installs remain explicit user actions.
 
-## Anonymous usage telemetry
+## Release publication
 
-Telemetry is independent of the GitHub updater. The preference is stored in the same application settings system under:
+The Windows build workflow verifies that `release-manifest.json`, `pyproject.toml`, and `protocol-pack.json` agree. When the manifest marks a version for publication and its release tag does not yet exist, the successful `main` build creates the canonical tag. The tag build then repeats the tests/build gates and publishes the GitHub release from the version-specific release-notes document.
 
-```text
-Send anonymous usage statistics
-```
-
-When disabled, the emulator makes no telemetry requests. When enabled, telemetry is short-timeout and background-only.
-
-See [`PRIVACY_TELEMETRY.md`](PRIVACY_TELEMETRY.md) for the exact event behavior and outbound field allowlist.
+Existing release tags are never moved automatically.
 
 ## Support
 
@@ -157,5 +172,3 @@ These support channels are for help using and troubleshooting the application. T
 ## Privacy and scope
 
 The GitHub updater sends ordinary unauthenticated HTTPS requests to GitHub's public release endpoints and does not upload hotel, guest, interface, capture, or property data.
-
-Anonymous usage telemetry is a separate HTTPS POST to the InnAware telemetry endpoint and is governed by the explicit privacy contract in `PRIVACY_TELEMETRY.md`.
