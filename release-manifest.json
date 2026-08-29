@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "application_version": "0.3.7",
+  "release_tag": "v0.3.7",
+  "release_channel": "field-beta",
+  "publish": true,
+  "prerelease": false,
+  "make_latest": true,
+  "protocol_pack_version": "2026.08.27.1",
+  "repository": "MusicCityTelecom/innaware-pms-emulator",
+  "update_source": "https://github.com/MusicCityTelecom/innaware-pms-emulator/releases"
+}
