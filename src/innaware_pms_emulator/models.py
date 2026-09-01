@@ -9,6 +9,13 @@ class InterfacePurpose(str, Enum):
     CALL_ACCOUNTING = "call_accounting"
 
 
+class EmulationRole(str, Enum):
+    PMS = "pms"
+    PBX = "pbx"
+    CALL_ACCOUNTING_SYSTEM = "call_accounting_system"
+    PBX_CALL_ACCOUNTING_OUTPUT = "pbx_call_accounting_output"
+
+
 class TransportMode(str, Enum):
     TCP_SERVER = "tcp_server"
     TCP_CLIENT = "tcp_client"
@@ -22,6 +29,10 @@ class InterfaceConfig(BaseModel):
     protocol: str
     transport: TransportMode
     property_id: str | None = Field(default=None, max_length=80)
+    # These fields are additive so 0.3.x saved interface files remain valid.
+    # When emulation_role is omitted, legacy behavior is inferred from purpose.
+    emulation_role: EmulationRole | None = None
+    personality_id: str | None = Field(default=None, max_length=120)
     enabled: bool = True
     bind_host: str = "0.0.0.0"
     host: str | None = None
@@ -33,6 +44,21 @@ class InterfaceConfig(BaseModel):
     stop_bits: float = 1
     flow_control: str = "none"
     options: dict[str, Any] = Field(default_factory=dict)
+
+    def effective_emulation_role(self) -> EmulationRole:
+        if self.emulation_role is not None:
+            return self.emulation_role
+        if self.purpose is InterfacePurpose.CALL_ACCOUNTING:
+            return EmulationRole.CALL_ACCOUNTING_SYSTEM
+        return EmulationRole.PMS
+
+    @field_validator("personality_id")
+    @classmethod
+    def normalize_personality_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        return normalized or None
 
     @field_validator("data_bits")
     @classmethod
