@@ -1,0 +1,116 @@
+{
+  "fixtures": [
+    {
+      "id": "generic-fias-link-and-room-events",
+      "personality": "pbx-generic-fias",
+      "protocol": "FIAS",
+      "framing": "crlf",
+      "status": "partially_characterized",
+      "sanitized": true,
+      "evidence": "Existing clean-room FIAS adapter behavior; not a claim about a specific vendor product.",
+      "steps": [
+        {"direction": "rx", "text": "LS|DA000101|TI000000|\r\n", "expect_record": "link_start", "expect_state": "negotiating"},
+        {"direction": "rx", "text": "LA|DA000101|TI000030|\r\n", "expect_record": "link_alive", "expect_state": "active"},
+        {"direction": "rx", "text": "RS|RN101|RS1|\r\n", "expect_record": "room_status"},
+        {"direction": "rx", "text": "PS|RN101|TA2.50|CTM|P#TEST-1|\r\n", "expect_record": "posting"},
+        {"direction": "rx", "text": "CT|RN101|DD000101|DT000100|DU000030|DA2.50|PN5550100|\r\n", "expect_record": "call_posting"},
+        {"direction": "rx", "text": "MW|RN101|MW1|\r\n", "expect_record": "message_status"},
+        {"direction": "rx", "text": "DR|DA000101|TI000100|\r\n", "expect_record": "synchronization_request"},
+        {"direction": "rx", "text": "WA|RN101|ASOK|\r\n", "expect_record": "wakeup_status"}
+      ]
+    },
+    {
+      "id": "hilton-pep-fias-sanitized",
+      "personality": "pms-hilton-pep-fias",
+      "protocol": "HILTON_PEP_FIAS",
+      "framing": "stx_etx",
+      "status": "partially_characterized",
+      "sanitized": true,
+      "evidence": "Existing combined-name adapter behavior; PBX-side event coverage still needs qualified captures.",
+      "steps": [{"direction": "rx", "hex": "02 47 49 7c 52 4e 31 30 31 7c 47 4e 54 45 53 54 2c 20 47 55 45 53 54 7c 03", "expect_framing": "stx_etx", "expect_record": "checkin"}]
+    },
+    {
+      "id": "matrix-sarvam-opera-field-observation-sanitized",
+      "personality": "pbx-matrix-sarvam-opera",
+      "protocol": "FIAS",
+      "framing": "stx_etx",
+      "status": "supported",
+      "sanitized": true,
+      "evidence": "Firmware/model-qualified SARVAM UCS field observation in MICROS Opera mode; original date and time replaced.",
+      "steps": [
+        {"direction": "rx", "hex": "02 4c 53 7c 44 41 30 30 30 31 30 31 7c 54 49 30 30 30 30 30 30 7c 03", "expect_framing": "stx_etx", "expect_record": "link_start", "expect_state": "active", "timing": {"observed_link_retry_seconds_approx": 30}},
+        {"direction": "tx", "expect_framing": "stx_etx", "expect_record": "link_start"}
+      ]
+    },
+    {
+      "id": "matrix-type1-capture-placeholder",
+      "personality": "pbx-matrix-type1",
+      "protocol": "MATRIX_TYPE1",
+      "framing": "unknown",
+      "status": "capture_only",
+      "sanitized": true,
+      "evidence": "Placeholder only; a qualified capture is required before encoding or framing claims.",
+      "steps": []
+    },
+    {
+      "id": "matrix-type2-mitel-compatibility",
+      "personality": "pbx-matrix-type2",
+      "protocol": "MITEL 2",
+      "framing": "stx_etx",
+      "status": "partially_characterized",
+      "sanitized": true,
+      "evidence": "Compatibility target only; not yet supported by a sanitized Matrix Type 2 field capture.",
+      "steps": [{"direction": "rx", "hex": "05", "expect_control": "ENQ"}, {"direction": "tx", "hex": "06", "expect_control": "ACK"}]
+    },
+    {
+      "id": "matrix-extended-starlight-capture-placeholder",
+      "personality": "pbx-matrix-extended-starlight",
+      "protocol": "MATRIX_EXTENDED_STARLIGHT",
+      "framing": "unknown",
+      "status": "capture_only",
+      "sanitized": true,
+      "evidence": "Placeholder only; no protocol or framing claim is made.",
+      "steps": []
+    },
+    {
+      "id": "mitel-1-sanitized",
+      "personality": "pbx-mitel-1",
+      "protocol": "MITEL 1",
+      "framing": "stx_etx",
+      "status": "supported",
+      "sanitized": true,
+      "evidence": "Existing clean-room fixed-width adapter and transaction tests.",
+      "steps": [{"direction": "rx", "hex": "05", "expect_control": "ENQ"}, {"direction": "tx", "hex": "06", "expect_control": "ACK"}, {"direction": "rx", "text": "WKP0630  101", "expect_record": "wakeup_set"}]
+    },
+    {
+      "id": "mitel-2-sanitized",
+      "personality": "pbx-mitel-2",
+      "protocol": "MITEL 2",
+      "framing": "stx_etx",
+      "status": "supported",
+      "sanitized": true,
+      "evidence": "Existing clean-room room-first compatibility adapter and transaction tests.",
+      "steps": [{"direction": "rx", "text": "CHK1  101 TEST,GUEST", "expect_record": "checkin"}]
+    },
+    {
+      "id": "voiceware-operaip-sanitized",
+      "personality": "pbx-voiceware-operaip",
+      "protocol": "OPERAIP_FIAS",
+      "framing": "stx_etx",
+      "status": "supported",
+      "sanitized": true,
+      "evidence": "Existing clean-room OperaIP command adapter and ENQ/ACK session behavior.",
+      "steps": [{"direction": "rx", "hex": "05", "expect_control": "ENQ"}, {"direction": "tx", "hex": "06", "expect_control": "ACK"}, {"direction": "rx", "hex": "02 53 54 53 31 20 31 30 31 03", "expect_framing": "stx_etx", "expect_record": "room_status"}]
+    },
+    {
+      "id": "innaware-ucp-compatibility-placeholder",
+      "personality": "pbx-innaware-ucp",
+      "protocol": "FIAS",
+      "framing": "profile_dependent",
+      "status": "capture_only",
+      "sanitized": true,
+      "evidence": "Compatibility placeholder; no production UCP wire behavior is asserted.",
+      "steps": []
+    }
+  ]
+}

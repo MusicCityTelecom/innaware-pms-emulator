@@ -1,0 +1,8 @@
+[
+  {"pms": "Opera FIAS", "pbx": "Matrix SARVAM Opera", "protocol": "FIAS", "status": "supported", "basis": "qualified PBX-to-PMS LS field observation plus existing FIAS parser"},
+  {"pms": "Hilton/PEP", "pbx": "Generic compatible FIAS PBX", "protocol": "HILTON_PEP_FIAS", "status": "partially_characterized", "basis": "adapter behavior; qualified PBX capture still required"},
+  {"pms": "Mitel-compatible PMS", "pbx": "Matrix Type 2", "protocol": "MITEL 2", "status": "partially_characterized", "basis": "compatibility target; Matrix capture not yet available"},
+  {"pms": "OperaIP", "pbx": "Voiceware", "protocol": "OPERAIP_FIAS", "status": "supported", "basis": "existing field-observed command family and regression fixtures"},
+  {"pms": "PMS", "pbx": "InnAware UCP", "protocol": "profile dependent", "status": "capture_only", "basis": "placeholder pending sanitized UCP captures"},
+  {"pms": "Generic CRLF FIAS", "pbx": "Matrix SARVAM Opera STX/ETX", "protocol": "FIAS", "status": "incompatible", "basis": "framing mismatch unless an explicit translation profile is selected"}
+]
