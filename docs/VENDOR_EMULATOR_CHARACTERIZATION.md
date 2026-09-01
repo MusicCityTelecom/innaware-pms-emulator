@@ -93,19 +93,39 @@ Capture for each operation:
 
 Use the Mitel Windows emulator to establish reference behavior for the Mitel-derived hospitality family, especially where our current `Mitel 1` and `Mitel 2` fixtures are incomplete.
 
-Important targets include:
+The project owner's field experience is that the principal practical difference between Mitel 1 and Mitel 2 is the `NAM`/guest-name compatibility length/layout rather than a wholly different protocol. The current InnAware development adapter historically models Mitel 2 as a room-first variable-name layout; treat that model as provisional until the vendor emulator or sanitized captures prove the exact byte layout.
 
-- exact room/name field order;
-- fixed vs variable field widths;
+Highest-priority characterization targets are therefore:
+
+- exact Mitel 1 `NAM` maximum/fixed length;
+- exact Mitel 2 `NAM` maximum/fixed length;
+- room-field position in both variants;
+- padding/truncation behavior;
+- whether other commands are byte-for-byte identical between variants;
 - ENQ/ACK sequence;
 - STX/ETX framing;
 - whether CR/LF occurs inside or outside frames;
 - transaction timing;
 - retry behavior;
 - PBX-originated events;
-- serial defaults and any TCP-wrapper behavior offered by the emulator.
+- serial defaults and any TCP/Telnet-wrapper behavior offered by the emulator.
 
 Do not assume a behavior is universal across SX-200 and MiVoice merely because one emulator exhibits it; qualify fixtures by product/profile when possible.
+
+## Later Mitel terminal-server deployments
+
+The project owner reports later Mitel deployments connecting to iPocket serial adapters through a Telnet client connection. Treat this as a transport/session wrapper around the serial-oriented Mitel hotel protocol, not as a new PMS protocol.
+
+Characterization should determine, when equipment/configuration is available:
+
+- whether the connection is plain Telnet, transparent TCP exposed as a Telnet service, RFC2217, or another serial-device-server mode;
+- which endpoint initiates the TCP/Telnet session;
+- whether Telnet negotiation bytes are present before PMS traffic;
+- whether serial settings are configured locally on the adapter or negotiated remotely;
+- reconnect behavior;
+- whether the application payload is unchanged from direct serial operation.
+
+Do not implement RFC2217 assumptions without a confirming capture/configuration.
 
 ## PhoneSuite reference emulator
 
@@ -114,6 +134,7 @@ Use the PhoneSuite Windows emulator to characterize both its Mitel-derived basel
 Important targets include:
 
 - Mitel 1/Mitel 2 compatibility behavior;
+- exact comparison of `NAM` layout/length against the Mitel reference emulator;
 - OperaIP/Voiceware-era ENQ/ACK plus STX/ETX behavior where exposed;
 - supported PMS-originated commands;
 - PBX-originated status/posting records;
