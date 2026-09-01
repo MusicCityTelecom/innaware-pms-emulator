@@ -77,7 +77,7 @@ PROTOCOL_METADATA = {
     },
     "OPERAIP_FIAS": {
         "maturity": "field-observed",
-        "description": "Voiceware-era OperaIP fixed-command payloads (CHK/NAM/MOV/WKP) using ENQ/ACK and STX/ETX without a checksum.",
+        "description": "PhoneSuite/Voiceware-era OperaIP fixed-command payloads (CHK/NAM/MOV/WKP) using ENQ/ACK and STX/ETX without a checksum.",
         "recommended": {
             "framing": "stx_etx", "role": "pms", "auto_ack": True,
             "ack_enq": True, "ack_records": True, "checksum": "none",
@@ -88,13 +88,13 @@ PROTOCOL_METADATA = {
     "MITEL 1": {
         "maturity": "fixture-backed",
         "public_id": "Mitel 1",
-        "description": "Classic Mitel-style serial hotel PMS layout: fixed-width name field followed by the five-character room field, with ENQ/ACK and STX/ETX transactions.",
+        "description": "Classic Mitel-derived hotel PMS layout: fixed-width name field followed by the five-character room field, with ENQ/ACK and STX/ETX transactions.",
         "recommended": _MITEL_RECOMMENDED,
     },
     "MITEL 2": {
         "maturity": "fixture-backed",
         "public_id": "Mitel 2",
-        "description": "Mitel-style serial compatibility layout: five-character room field before a variable-length guest name so long names cannot shift the room field.",
+        "description": "Mitel-derived hotel PMS compatibility layout: five-character room field before a variable-length guest name so long names cannot shift the room field.",
         "recommended": _MITEL_RECOMMENDED,
     },
     "MITEL_1": {"hidden": True},
@@ -161,6 +161,9 @@ def protocol_catalog():
         item.pop("public_id", None)
         catalog.append(item)
     catalog.extend([
+        {"id": "MATRIX_TYPE1", "purpose": "pms", "implemented": False, "maturity": "capture", "description": "Matrix Type 1 compatibility mode; capture-driven characterization pending."},
+        {"id": "MATRIX_EXTENDED_STARLIGHT", "purpose": "pms", "implemented": False, "maturity": "capture", "description": "Matrix Extended Starlight compatibility mode; capture-driven characterization pending."},
+        {"id": "HITACHI", "purpose": "pms", "implemented": False, "maturity": "capture", "description": "Hitachi hospitality PMS/PBX protocol family; intentionally separate from Mitel-derived compatibility until field fixtures characterize it."},
         {"id": "HOTELKEY", "purpose": "pms", "implemented": False, "transport": "http_server", "maturity": "planned"},
         {"id": "HOBIC", "purpose": "call_accounting", "implemented": False, "maturity": "planned"},
         {"id": "HOBIS2", "purpose": "call_accounting", "implemented": False, "maturity": "planned", "description": "Five-digit-extension HOBIS variant; exact fixture work pending."},
