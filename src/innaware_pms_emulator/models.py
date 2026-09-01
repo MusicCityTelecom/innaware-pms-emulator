@@ -29,10 +29,15 @@ class InterfaceConfig(BaseModel):
     protocol: str
     transport: TransportMode
     property_id: str | None = Field(default=None, max_length=80)
-    # These fields are additive so 0.3.x saved interface files remain valid.
-    # When emulation_role is omitted, legacy behavior is inferred from purpose.
+
+    # v0.4+ endpoint identity. These fields are additive so 0.3.x saved
+    # interface files remain valid. `personality_id` is what InnAware is
+    # pretending to be; `peer_personality_id` is the real/remote system under
+    # test. Keeping both is critical for diagnostics and reversible lab tests.
     emulation_role: EmulationRole | None = None
     personality_id: str | None = Field(default=None, max_length=120)
+    peer_personality_id: str | None = Field(default=None, max_length=120)
+
     enabled: bool = True
     bind_host: str = "0.0.0.0"
     host: str | None = None
@@ -52,7 +57,7 @@ class InterfaceConfig(BaseModel):
             return EmulationRole.CALL_ACCOUNTING_SYSTEM
         return EmulationRole.PMS
 
-    @field_validator("personality_id")
+    @field_validator("personality_id", "peer_personality_id")
     @classmethod
     def normalize_personality_id(cls, value: str | None) -> str | None:
         if value is None:
