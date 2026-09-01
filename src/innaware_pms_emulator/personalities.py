@@ -18,6 +18,8 @@ class EndpointPersonality:
     recommended_profile: str | None = None
     defaults: dict[str, Any] = field(default_factory=dict)
     notes: tuple[str, ...] = ()
+    compatibility_family: str | None = None
+    brand: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -31,9 +33,14 @@ class EndpointPersonality:
             "recommended_profile": self.recommended_profile,
             "defaults": self.defaults,
             "notes": list(self.notes),
+            "compatibility_family": self.compatibility_family,
+            "brand": self.brand,
         }
 
 
+# PBX personalities are technician-facing systems/brands. Wire layouts such as
+# Mitel 1 and Mitel 2 are protocol/profile choices underneath a PBX personality,
+# not PBX brands themselves.
 PERSONALITIES: dict[str, EndpointPersonality] = {
     "pms-generic-fias": EndpointPersonality(
         id="pms-generic-fias",
@@ -44,6 +51,7 @@ PERSONALITIES: dict[str, EndpointPersonality] = {
         description="Generic PMS-side FIAS personality for standards-oriented interoperability testing.",
         protocols=("FIAS",),
         recommended_profile="fias-pms-tcp-server",
+        compatibility_family="fias",
     ),
     "pms-opera-fias": EndpointPersonality(
         id="pms-opera-fias",
@@ -55,6 +63,8 @@ PERSONALITIES: dict[str, EndpointPersonality] = {
         protocols=("FIAS",),
         recommended_profile="fias-pms-tcp-server",
         notes=("Select the PBX-specific framing/session profile when known; Opera/FIAS deployments vary by integration partner.",),
+        compatibility_family="fias",
+        brand="Oracle / MICROS",
     ),
     "pms-hilton-pep-fias": EndpointPersonality(
         id="pms-hilton-pep-fias",
@@ -65,6 +75,8 @@ PERSONALITIES: dict[str, EndpointPersonality] = {
         description="Hilton/PEP PMS personality with combined guest-name FIAS semantics.",
         protocols=("HILTON_PEP_FIAS",),
         recommended_profile="hilton-pep-fias-tcp-server",
+        compatibility_family="fias",
+        brand="Hilton",
     ),
     "pms-onq": EndpointPersonality(
         id="pms-onq",
@@ -74,6 +86,8 @@ PERSONALITIES: dict[str, EndpointPersonality] = {
         maturity="encoder",
         description="OnQ-compatible PMS personality using the existing legacy hotel adapter foundation.",
         protocols=("ONQ",),
+        compatibility_family="mitel_hospitality",
+        brand="Hilton",
     ),
     "pms-choice-advantage": EndpointPersonality(
         id="pms-choice-advantage",
@@ -83,99 +97,116 @@ PERSONALITIES: dict[str, EndpointPersonality] = {
         maturity="encoder",
         description="Choice Advantage-compatible PMS personality using the existing legacy hotel adapter foundation.",
         protocols=("CHOICE_ADVANTAGE",),
+        brand="Choice Hotels",
     ),
     "pbx-generic-fias": EndpointPersonality(
         id="pbx-generic-fias",
-        name="Generic FIAS PBX",
+        name="Generic / Unknown FIAS PBX",
         purpose=InterfacePurpose.PMS,
         role=EmulationRole.PBX,
         maturity="planned",
-        description="Generic PBX-side FIAS personality for testing a PMS implementation from the PBX side.",
+        description="Generic PBX-side FIAS personality for testing a PMS implementation when the PBX brand/profile is unknown.",
         protocols=("FIAS",),
+        compatibility_family="fias",
+        brand="Generic",
     ),
-    "pbx-matrix-sarvam-opera": EndpointPersonality(
-        id="pbx-matrix-sarvam-opera",
-        name="Matrix SARVAM UCS - MICROS Opera",
+
+    # Canonical technician-facing PBX brand catalog.
+    "pbx-mitel-sx200": EndpointPersonality(
+        id="pbx-mitel-sx200",
+        name="Mitel SX-200",
         purpose=InterfacePurpose.PMS,
         role=EmulationRole.PBX,
-        maturity="field-observed",
-        description="Matrix SARVAM UCS PBX personality observed using FIAS records inside STX/ETX framing over TCP in MICROS Opera mode.",
-        protocols=("FIAS",),
-        defaults={
-            "framing": "stx_etx",
-            "role": "pbx",
-            "link_initiator": "pbx",
-            "transport_preference": "tcp_client",
-        },
-        notes=("Observed on a live SARVAM UCS deployment; preserve firmware/model qualifiers in future fixtures.",),
+        maturity="fixture-backed",
+        description="Mitel SX-200 hospitality PBX personality. Mitel 1 and Mitel 2 are selectable wire/profile variants underneath this PBX brand.",
+        protocols=("MITEL 1", "MITEL 2"),
+        recommended_profile="mitel-1-serial",
+        notes=("Transport may be Serial or TCP when testing the same Mitel-family application behavior through a transport wrapper.",),
+        compatibility_family="mitel_hospitality",
+        brand="Mitel",
     ),
-    "pbx-matrix-type1": EndpointPersonality(
-        id="pbx-matrix-type1",
-        name="Matrix SARVAM UCS - Type 1",
-        purpose=InterfacePurpose.PMS,
-        role=EmulationRole.PBX,
-        maturity="capture",
-        description="Matrix Type 1 PBX personality reserved for capture-driven characterization.",
-        protocols=("MATRIX_TYPE1",),
-    ),
-    "pbx-matrix-type2": EndpointPersonality(
-        id="pbx-matrix-type2",
-        name="Matrix SARVAM UCS - Type 2",
+    "pbx-mitel-mivoice": EndpointPersonality(
+        id="pbx-mitel-mivoice",
+        name="Mitel MiVoice",
         purpose=InterfacePurpose.PMS,
         role=EmulationRole.PBX,
         maturity="compatibility",
-        description="Matrix Type 2 PBX personality intended for Mitel-compatible hotel PMS testing.",
+        description="Mitel MiVoice hospitality PBX personality using the Mitel-derived hotel PMS compatibility family; exact model/version quirks remain profile-qualified.",
         protocols=("MITEL 1", "MITEL 2"),
-        notes=("Do not mark a specific Mitel layout field-observed until a sanitized Matrix Type 2 capture proves it.",),
-    ),
-    "pbx-matrix-extended-starlight": EndpointPersonality(
-        id="pbx-matrix-extended-starlight",
-        name="Matrix SARVAM UCS - Extended Starlight",
-        purpose=InterfacePurpose.PMS,
-        role=EmulationRole.PBX,
-        maturity="capture",
-        description="Matrix Extended Starlight PBX personality reserved for capture-driven characterization.",
-        protocols=("MATRIX_EXTENDED_STARLIGHT",),
-    ),
-    "pbx-mitel-1": EndpointPersonality(
-        id="pbx-mitel-1",
-        name="Mitel PBX - Type 1",
-        purpose=InterfacePurpose.PMS,
-        role=EmulationRole.PBX,
-        maturity="fixture-backed",
-        description="PBX-side Mitel 1 hotel PMS personality using the existing fixed-width Mitel record layout.",
-        protocols=("MITEL 1",),
-        recommended_profile="mitel-1-serial",
-    ),
-    "pbx-mitel-2": EndpointPersonality(
-        id="pbx-mitel-2",
-        name="Mitel PBX - Type 2",
-        purpose=InterfacePurpose.PMS,
-        role=EmulationRole.PBX,
-        maturity="fixture-backed",
-        description="PBX-side Mitel 2 hotel PMS personality using the variable-length guest-name compatibility layout.",
-        protocols=("MITEL 2",),
         recommended_profile="mitel-2-serial",
+        notes=("Do not assume every MiVoice model/firmware uses the same field layout; keep Mitel 1 and Mitel 2 independently selectable.",),
+        compatibility_family="mitel_hospitality",
+        brand="Mitel",
     ),
-    "pbx-voiceware-operaip": EndpointPersonality(
-        id="pbx-voiceware-operaip",
-        name="Voiceware PBX - OperaIP",
+    "pbx-phonesuite": EndpointPersonality(
+        id="pbx-phonesuite",
+        name="PhoneSuite",
         purpose=InterfacePurpose.PMS,
         role=EmulationRole.PBX,
         maturity="field-observed",
-        description="Voiceware-era PBX personality for the observed OperaIP ENQ/ACK plus STX/ETX command family.",
-        protocols=("OPERAIP_FIAS",),
-        recommended_profile="operaip-fias-tcp-server",
+        description="PhoneSuite hospitality PBX personality. Treat Mitel-family compatibility as the baseline while retaining the field-observed Voiceware/OperaIP session variant as an optional profile.",
+        protocols=("MITEL 1", "MITEL 2", "OPERAIP_FIAS"),
+        recommended_profile="mitel-1-serial",
+        notes=(
+            "Voiceware-era OperaIP behavior belongs under the PhoneSuite brand as a compatibility/profile variant, not as a separate PBX manufacturer.",
+            "The observed OperaIP variant uses ENQ/ACK plus STX/ETX fixed-command traffic and should remain independently selectable.",
+        ),
+        compatibility_family="mitel_hospitality",
+        brand="PhoneSuite",
+    ),
+    "pbx-matrix": EndpointPersonality(
+        id="pbx-matrix",
+        name="Matrix",
+        purpose=InterfacePurpose.PMS,
+        role=EmulationRole.PBX,
+        maturity="field-observed",
+        description="Matrix hospitality PBX personality. Use Mitel-family compatibility for the Mitel-derived modes and preserve Matrix-specific protocol modes as separately selectable profiles.",
+        protocols=("FIAS", "MITEL 1", "MITEL 2", "MATRIX_TYPE1", "MATRIX_EXTENDED_STARLIGHT"),
+        defaults={"role": "pbx"},
+        notes=(
+            "A live Matrix SARVAM UCS in MICROS Opera mode was observed initiating FIAS LS over TCP using STX/ETX framing.",
+            "Matrix Type 1, Type 2, MICROS Opera and Extended Starlight must remain mode/profile choices beneath the Matrix brand.",
+        ),
+        compatibility_family="mitel_hospitality",
+        brand="Matrix",
+    ),
+    "pbx-hitachi": EndpointPersonality(
+        id="pbx-hitachi",
+        name="Hitachi",
+        purpose=InterfacePurpose.PMS,
+        role=EmulationRole.PBX,
+        maturity="capture",
+        description="Hitachi hospitality PBX personality. Keep Hitachi separate from the Mitel-derived compatibility family and characterize its wire protocol from sanitized fixtures and field captures.",
+        protocols=("HITACHI",),
+        notes=("Do not map Hitachi traffic onto a Mitel adapter unless an actual capture proves a specific compatibility mode.",),
+        compatibility_family="hitachi",
+        brand="Hitachi",
     ),
     "pbx-innaware-ucp": EndpointPersonality(
         id="pbx-innaware-ucp",
-        name="InnAware UCP PBX",
+        name="InnAware UCP",
         purpose=InterfacePurpose.PMS,
         role=EmulationRole.PBX,
         maturity="planned",
-        description="InnAware UCP hospitality PBX personality used to validate UCP PMS interoperability from the opposite endpoint.",
-        protocols=("FIAS", "HILTON_PEP_FIAS", "OPERAIP_FIAS", "MITEL 1", "MITEL 2"),
+        description="InnAware UCP hospitality PBX personality. It should emulate/test the Mitel-derived compatibility family plus InnAware-supported FIAS compatibility profiles.",
+        protocols=("MITEL 1", "MITEL 2", "FIAS", "HILTON_PEP_FIAS", "OPERAIP_FIAS"),
+        notes=("InnAware should be able to impersonate both legacy Mitel-style hotel interfaces and modern FIAS-family integrations for interoperability testing.",),
+        compatibility_family="mitel_hospitality",
+        brand="InnAware",
     ),
+}
+
+
+# Feature-branch aliases keep earlier v0.4 development references working while
+# the public catalog exposes the normalized PBX brands above.
+PERSONALITY_ALIASES: dict[str, str] = {
+    "pbx-mitel-1": "pbx-mitel-sx200",
+    "pbx-mitel-2": "pbx-mitel-mivoice",
+    "pbx-voiceware-operaip": "pbx-phonesuite",
+    "pbx-matrix-sarvam-opera": "pbx-matrix",
+    "pbx-matrix-type1": "pbx-matrix",
+    "pbx-matrix-type2": "pbx-matrix",
+    "pbx-matrix-extended-starlight": "pbx-matrix",
 }
 
 
@@ -184,4 +215,6 @@ def personality_catalog() -> list[dict[str, Any]]:
 
 
 def get_personality(personality_id: str) -> EndpointPersonality | None:
-    return PERSONALITIES.get(personality_id.strip().lower())
+    key = personality_id.strip().lower()
+    key = PERSONALITY_ALIASES.get(key, key)
+    return PERSONALITIES.get(key)
