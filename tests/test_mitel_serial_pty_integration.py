@@ -88,7 +88,7 @@ def test_mitel_serial_runtime_over_real_pty_fragmentation_and_reopen_reset():
             status = runtime.transport_session_status
             assert status is not None
             assert status["transport"] == "serial"
-            assert status["state"] == "open"
+            assert status["state"] == "idle"
             assert status["enq_received"] == 1
             assert status["frames_received"] == 1
 
@@ -99,7 +99,7 @@ def test_mitel_serial_runtime_over_real_pty_fragmentation_and_reopen_reset():
             await manager.stop("mitel-serial-pty")
 
             diagnostics = manager.diagnostics("mitel-serial-pty")
-            incomplete = [item for item in diagnostics if item["code"] == "mitel_serial_incomplete_frame"]
+            incomplete = [item for item in diagnostics if item["code"] == "mitel_serial_close_incomplete_frame"]
             assert incomplete
             assert incomplete[-1]["evidence_class"] == "legacy_source_profile_verified"
             assert "STX" in incomplete[-1]["observed"]
@@ -115,7 +115,7 @@ def test_mitel_serial_runtime_over_real_pty_fragmentation_and_reopen_reset():
 
             status = manager.get("mitel-serial-pty").transport_session_status
             assert status is not None
-            assert status["state"] == "open"
+            assert status["state"] == "idle"
             assert status["enq_received"] == 1
             assert status["frames_received"] == 1
             assert status["last_opcode"] == "CHK0"
