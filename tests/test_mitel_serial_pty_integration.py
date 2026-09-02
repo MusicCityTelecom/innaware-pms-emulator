@@ -8,7 +8,7 @@ if os.name != "nt":
 else:  # pragma: no cover - import guard for Windows collection
     pty = None
 
-from innaware_pms_emulator.framing import ACK, ENQ, ETX, STX
+from innaware_pms_emulator.framing import ACK, ENQ, ETX, NAK, STX
 from innaware_pms_emulator.models import InterfaceConfig
 from innaware_pms_emulator.sessions import InterfaceManager
 
@@ -127,6 +127,67 @@ def test_mitel_serial_runtime_over_real_pty_fragmentation_and_reopen_reset():
         finally:
             try:
                 await manager.stop("mitel-serial-pty")
+            except Exception:
+                pass
+            os.close(master_fd)
+
+    asyncio.run(exercise())
+
+
+def test_outbound_mitel_serial_transaction_over_real_pty_retries_record_without_second_enq():
+    async def exercise() -> None:
+        assert pty is not None
+        master_fd, slave_fd = pty.openpty()
+        slave_name = os.ttyname(slave_fd)
+        os.close(slave_fd)
+        os.set_blocking(master_fd, False)
+
+        manager = InterfaceManager()
+        config = _serial_config(slave_name)
+        config.name = "mitel-serial-pty-outbound"
+        config.options.update({
+            "ack_timeout": 0.5,
+            "max_attempts": 2,
+            "max_record_retries": 1,
+            "framing": "stx_etx",
+            "transaction_framing": "stx_etx",
+        })
+        await manager.create(config)
+
+        try:
+            await manager.start(config.name)
+            await _wait_online(manager, config.name)
+
+            record = b"CHK1ROOM201"
+            wire_record = bytes((STX,)) + record + bytes((ETX,))
+            transaction = asyncio.create_task(manager.send_pms_transaction(config.name, record))
+
+            # The real serial writer must acquire the half-duplex grant first.
+            assert await _read_master(master_fd, 1) == bytes((ENQ,))
+            os.write(master_fd, bytes((ACK,)))
+
+            # First application attempt is rejected by the simulated peer.
+            assert await _read_master(master_fd, len(wire_record)) == wire_record
+            os.write(master_fd, bytes((NAK,)))
+
+            # Evidence-qualified retry behavior resends only the application
+            # frame; it must not emit a second ENQ before the retry.
+            assert await _read_master(master_fd, len(wire_record)) == wire_record
+            os.write(master_fd, bytes((ACK,)))
+
+            result = await asyncio.wait_for(transaction, timeout=2)
+            assert result["success"] is True
+            assert result["stage"] == "complete"
+            assert result["attempts"] == 2
+            assert "diagnostic" not in result
+
+            tx = [item for item in manager.captures(config.name) if item["direction"] == "tx"]
+            assert sum(item["hex"] == "05" for item in tx) == 1
+            assert sum(item["hex"] == wire_record.hex(" ") for item in tx) == 2
+            assert manager.transactions(config.name)[-1]["success"] is True
+        finally:
+            try:
+                await manager.stop(config.name)
             except Exception:
                 pass
             os.close(master_fd)
