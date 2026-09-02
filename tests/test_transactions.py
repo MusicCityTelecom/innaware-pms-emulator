@@ -89,3 +89,45 @@ def test_mitel_retries_enq_before_record_phase():
     ))
     assert result.success is True
     assert [kind for kind, _, _ in sent] == ["control", "control", "record"]
+
+
+def test_mitel_default_allows_initial_record_plus_three_message_only_retries():
+    sent = []
+    replies = asyncio.Queue()
+    for value in (ACK, NAK, NAK, NAK, ACK):
+        replies.put_nowait(value)
+
+    async def send_control(data, note): sent.append(("control", data, note))
+    async def send_record(data, note): sent.append(("record", data, note))
+    async def wait_response(timeout): return await asyncio.wait_for(replies.get(), timeout)
+
+    sender = MitelTransactionSender(timeout=.1)
+    result = asyncio.run(sender.run(
+        b"record", send_control=send_control, send_record=send_record, wait_response=wait_response
+    ))
+
+    assert result.success is True
+    assert result.attempts == 4
+    assert sender.max_record_retries == 3
+    assert sender.max_record_attempts == 4
+    assert [kind for kind, _, _ in sent] == ["control", "record", "record", "record", "record"]
+
+
+def test_mitel_record_retry_budget_can_be_reduced_without_changing_enq_budget():
+    sent = []
+    replies = asyncio.Queue()
+    for value in (NAK, ACK, NAK, ACK):
+        replies.put_nowait(value)
+
+    async def send_control(data, note): sent.append(("control", data, note))
+    async def send_record(data, note): sent.append(("record", data, note))
+    async def wait_response(timeout): return await asyncio.wait_for(replies.get(), timeout)
+
+    sender = MitelTransactionSender(timeout=.1, max_attempts=3, max_record_retries=1)
+    result = asyncio.run(sender.run(
+        b"record", send_control=send_control, send_record=send_record, wait_response=wait_response
+    ))
+
+    assert result.success is True
+    assert result.attempts == 2
+    assert [kind for kind, _, _ in sent] == ["control", "control", "record", "record"]
