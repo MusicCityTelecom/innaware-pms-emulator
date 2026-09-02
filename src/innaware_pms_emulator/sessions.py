@@ -9,6 +9,7 @@ from typing import Any
 import serial_asyncio
 
 from .framing import ACK, ENQ, NAK, FramingMode, control_name, encode_frame
+from .mitel_session import MitelSessionDiagnostic, MitelTcpSessionStateMachine
 from .models import InterfaceConfig, TransportMode
 from .property_state import property_manager
 from .state import CallAccountingStateMachine, EngineAction, FiasStateMachine
@@ -17,6 +18,7 @@ from .transactions import CallAccountingTransactionSender, MitelTransactionSende
 
 _TRANSACTIONAL_CA_PROTOCOLS = {"INNFORM_XL", "HOBIS", "HOBIS_A", "HOLIDEX"}
 _TRANSACTIONAL_PMS_PROTOCOLS = {"MITEL 1", "MITEL 2", "MITEL_1", "MITEL_2", "DEFAULT", "DEFAULT2"}
+_MITEL_TCP_PROTOCOLS = {"MITEL 1", "MITEL 2", "MITEL_1", "MITEL_2"}
 
 
 @dataclass(slots=True)
@@ -54,6 +56,8 @@ class InterfaceRuntime:
     responses: asyncio.Queue[int] = field(default_factory=asyncio.Queue)
     transaction_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     transaction_history: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=200))
+    session_diagnostics: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=500))
+    transport_session_status: dict[str, Any] | None = None
     client_tasks: set[asyncio.Task] = field(default_factory=set)
     stopping: bool = False
 
@@ -78,9 +82,12 @@ class InterfaceRuntime:
             "connected_clients": len(self.clients),
             "last_error": self.last_error,
             "transaction_count": len(self.transaction_history),
+            "session_diagnostic_count": len(self.session_diagnostics),
         }
         if self.engine:
             result["protocol_state"] = self.engine.status()
+        if self.transport_session_status is not None:
+            result["transport_session"] = dict(self.transport_session_status)
         return result
 
 
@@ -165,6 +172,7 @@ class InterfaceManager:
         runtime.last_error = None
         runtime.stopping = False
         runtime.engine = self._build_engine(runtime.config)
+        runtime.transport_session_status = None
         transport = runtime.config.transport
         if transport is TransportMode.TCP_SERVER:
             await self._start_tcp_server(runtime)
@@ -283,7 +291,12 @@ class InterfaceManager:
 
         timeout = float(runtime.config.options.get("ack_timeout", 3.0))
         max_attempts = int(runtime.config.options.get("max_attempts", 3))
-        sender = MitelTransactionSender(timeout=timeout, max_attempts=max_attempts)
+        max_record_retries = int(runtime.config.options.get("max_record_retries", 3))
+        sender = MitelTransactionSender(
+            timeout=timeout,
+            max_attempts=max_attempts,
+            max_record_retries=max_record_retries,
+        )
 
         async with runtime.transaction_lock:
             self._clear_responses(runtime)
@@ -329,6 +342,9 @@ class InterfaceManager:
 
     def transactions(self, name: str, limit: int = 100) -> list[dict[str, Any]]:
         return list(self.get(name).transaction_history)[-max(1, min(limit, 200)):]
+
+    def diagnostics(self, name: str, limit: int = 100) -> list[dict[str, Any]]:
+        return list(self.get(name).session_diagnostics)[-max(1, min(limit, 500)):]
 
     async def _write(self, runtime: InterfaceRuntime, wire: bytes, *, note: str | None = None) -> int:
         sent = 0
@@ -446,26 +462,56 @@ class InterfaceManager:
             runtime.state = "error"
 
     async def _reader_loop(self, runtime: InterfaceRuntime, reader: asyncio.StreamReader, peer: str | None) -> None:
-        while True:
-            data = await reader.read(4096)
-            if not data:
-                break
-            note = control_name(data[0]) if len(data) == 1 else None
-            runtime.capture("rx", data, peer=peer, note=note)
+        mitel_session: MitelTcpSessionStateMachine | None = None
+        if self._uses_mitel_tcp_session(runtime):
+            mitel_session = MitelTcpSessionStateMachine(
+                auto_ack=bool(runtime.config.options.get("auto_ack", True)),
+                strict_half_duplex=bool(runtime.config.options.get("strict_half_duplex", True)),
+            )
+            mitel_session.connect()
+            runtime.transport_session_status = mitel_session.status()
 
-            for byte in data:
-                if byte in {ACK, NAK}:
-                    runtime.responses.put_nowait(byte)
+        try:
+            while True:
+                data = await reader.read(4096)
+                if not data:
+                    break
+                note = control_name(data[0]) if len(data) == 1 else None
+                runtime.capture("rx", data, peer=peer, note=note)
 
-            if runtime.engine:
-                for action in runtime.engine.feed(data):
-                    await self._send_action(runtime, peer, action)
-            elif runtime.config.options.get("auto_ack") and data not in {bytes((ACK,)), bytes((NAK,))}:
-                await self._send_action(
-                    runtime,
-                    peer,
-                    EngineAction(bytes((ACK,)), "generic auto ACK", apply_framing=False),
-                )
+                if mitel_session is not None:
+                    feed = mitel_session.feed(data)
+                    for control in feed.response_controls:
+                        runtime.responses.put_nowait(control)
+                    for action in feed.actions:
+                        await self._send_action(
+                            runtime,
+                            peer,
+                            EngineAction(action.payload, action.note, apply_framing=False),
+                        )
+                    for diagnostic in feed.diagnostics:
+                        self._record_session_diagnostic(runtime, peer, diagnostic)
+                    runtime.transport_session_status = mitel_session.status()
+                    continue
+
+                for byte in data:
+                    if byte in {ACK, NAK}:
+                        runtime.responses.put_nowait(byte)
+
+                if runtime.engine:
+                    for action in runtime.engine.feed(data):
+                        await self._send_action(runtime, peer, action)
+                elif runtime.config.options.get("auto_ack") and data not in {bytes((ACK,)), bytes((NAK,))}:
+                    await self._send_action(
+                        runtime,
+                        peer,
+                        EngineAction(bytes((ACK,)), "generic auto ACK", apply_framing=False),
+                    )
+        finally:
+            if mitel_session is not None:
+                for diagnostic in mitel_session.disconnect():
+                    self._record_session_diagnostic(runtime, peer, diagnostic)
+                runtime.transport_session_status = mitel_session.status()
 
     async def _send_action(self, runtime: InterfaceRuntime, peer: str | None, action: EngineAction) -> None:
         writer = self._writer_for_peer(runtime, peer)
@@ -476,6 +522,27 @@ class InterfaceManager:
         writer.write(wire)
         await writer.drain()
         runtime.capture("tx", wire, peer=peer, note=action.note)
+
+    @staticmethod
+    def _uses_mitel_tcp_session(runtime: InterfaceRuntime) -> bool:
+        return (
+            runtime.config.purpose.value == "pms"
+            and runtime.config.protocol.upper() in _MITEL_TCP_PROTOCOLS
+            and runtime.config.transport in {TransportMode.TCP_SERVER, TransportMode.TCP_CLIENT}
+        )
+
+    @staticmethod
+    def _record_session_diagnostic(
+        runtime: InterfaceRuntime,
+        peer: str | None,
+        diagnostic: MitelSessionDiagnostic,
+    ) -> None:
+        runtime.session_diagnostics.append({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "peer": peer,
+            "protocol": runtime.config.protocol,
+            **diagnostic.as_dict(),
+        })
 
     @staticmethod
     def _peer_name(writer: asyncio.StreamWriter) -> str | None:
