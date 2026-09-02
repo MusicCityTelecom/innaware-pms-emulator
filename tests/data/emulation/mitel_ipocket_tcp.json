@@ -1,0 +1,22 @@
+{
+  "fixtures": [
+    {
+      "id": "mitel-ipocket-tcp-sanitized-control-and-frame-sequence",
+      "personality": "pbx-mitel-sx200",
+      "protocol": "MITEL 2",
+      "framing": "stx_etx",
+      "status": "partially_characterized",
+      "sanitized": true,
+      "evidence": "Issue #4: iPocket/Mitel TCP capture verifies ENQ/ACK/NAK controls, STX/ETX framing, AREYUTHERE, CHK1 and NAM2 families. Room/name values below are synthetic; the room-first NAM layout is legacy-profile compatible and is not asserted as a byte-for-byte reproduction of captured guest PII.",
+      "steps": [
+        {"direction": "rx", "hex": "05", "expect_control": "ENQ"},
+        {"direction": "tx", "hex": "06", "expect_control": "ACK"},
+        {"direction": "rx", "hex": "02 41 52 45 59 55 54 48 45 52 45 03", "expect_framing": "stx_etx", "expect_record": "heartbeat"},
+        {"direction": "rx", "hex": "02 43 48 4b 31 20 20 31 30 31 03", "expect_framing": "stx_etx", "expect_record": "checkin"},
+        {"direction": "rx", "hex": "02 4e 41 4d 32 20 20 31 30 31 20 54 45 53 54 2c 47 55 45 53 54 03", "expect_framing": "stx_etx", "expect_record": "name_update"},
+        {"direction": "rx", "hex": "15", "expect_control": "NAK"},
+        {"direction": "disconnect", "timing": {"behavior": "tcp_session_may_reconnect"}}
+      ]
+    }
+  ]
+}
