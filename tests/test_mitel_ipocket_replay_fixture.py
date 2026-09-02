@@ -19,7 +19,10 @@ def test_mitel_ipocket_fixture_is_sanitized_and_provenance_qualified():
 
     source = FIXTURE_PATH.read_text(encoding="utf-8")
     assert "192.168.1." not in source
-    assert "GUEST" in source
+    # Fixture payload bytes are deliberately stored as hex rather than plaintext.
+    # Verify synthetic guest content by decoding the replay below instead of
+    # requiring guest data to appear literally in the JSON source.
+    assert '"hex"' in source
 
 
 def test_mitel_ipocket_fixture_replays_capture_verified_controls_and_message_families():
