@@ -67,15 +67,28 @@ class CallAccountingTransactionSender:
 class MitelTransactionSender:
     """Mitel-style half-duplex PMS transaction sender.
 
-    The link is opened with ENQ/ACK. Once the initial ENQ is acknowledged, a
-    STX/ETX-framed record may be retried after NAK/timeout without repeating the
-    ENQ handshake. This keeps the retry behavior separate from call-accounting
-    transaction assumptions.
+    Evidence-backed Mitel-compatible behavior is ENQ -> ACK followed by a
+    STX/ETX-framed application record -> ACK/NAK. The public Mitel-compatible
+    specification indexed in issue #4 allows three message-only retries after
+    the initial frame, without sending another ENQ. ``max_attempts`` therefore
+    continues to bound ENQ acquisition while ``max_record_retries`` controls
+    the post-ENQ application retry budget.
+
+    The 3-second default ACK timeout is evidence-backed for this compatibility
+    profile; callers may override it for separately characterized variants.
     """
 
-    def __init__(self, *, timeout: float = 3.0, max_attempts: int = 3) -> None:
+    def __init__(
+        self,
+        *,
+        timeout: float = 3.0,
+        max_attempts: int = 3,
+        max_record_retries: int = 3,
+    ) -> None:
         self.timeout = max(0.1, float(timeout))
         self.max_attempts = max(1, int(max_attempts))
+        self.max_record_retries = max(0, int(max_record_retries))
+        self.max_record_attempts = 1 + self.max_record_retries
 
     async def run(
         self,
@@ -95,16 +108,16 @@ class MitelTransactionSender:
                 reason = "NAK" if response == NAK else "timeout"
                 return TransactionResult(False, "enq", enq_attempt, f"ENQ not acknowledged: {reason}")
 
-        for record_attempt in range(1, self.max_attempts + 1):
+        for record_attempt in range(1, self.max_record_attempts + 1):
             await send_record(record, f"Mitel record attempt {record_attempt}")
             response = await self._wait(wait_response)
             if response == ACK:
                 return TransactionResult(True, "complete", record_attempt, "record acknowledged")
-            if record_attempt == self.max_attempts:
+            if record_attempt == self.max_record_attempts:
                 reason = "NAK" if response == NAK else "timeout"
                 return TransactionResult(False, "record", record_attempt, f"record not acknowledged: {reason}")
 
-        return TransactionResult(False, "unknown", self.max_attempts, "transaction exhausted")
+        return TransactionResult(False, "unknown", self.max_record_attempts, "transaction exhausted")
 
     async def _wait(self, wait_response: Callable[[float], Awaitable[int]]) -> int:
         try:
