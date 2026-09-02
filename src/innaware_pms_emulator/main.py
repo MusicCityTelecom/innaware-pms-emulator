@@ -334,6 +334,12 @@ def interface_transactions(name: str, limit: int = 100):
     return {"transactions": manager.transactions(name, limit)}
 
 
+@app.get("/api/v1/interfaces/{name}/diagnostics")
+def interface_diagnostics(name: str, limit: int = 100):
+    _interface_or_404(name)
+    return {"diagnostics": manager.diagnostics(name, limit)}
+
+
 @app.get("/api/v1/support-bundle")
 def support_bundle(include_property_state: bool = False):
     statuses = manager.list()
@@ -341,6 +347,7 @@ def support_bundle(include_property_state: bool = False):
     property_summaries = property_manager.list()
     captures = {item["name"]: manager.captures(item["name"], 2000) for item in statuses}
     transactions = {item["name"]: manager.transactions(item["name"], 200) for item in statuses}
+    diagnostics = {item["name"]: manager.diagnostics(item["name"], 500) for item in statuses}
     full_state = None
     if include_property_state:
         full_state = [property_manager.get(item["id"]).model_dump(mode="json") for item in property_summaries]
@@ -352,6 +359,7 @@ def support_bundle(include_property_state: bool = False):
         serial_ports=_serial_port_catalog(),
         captures_by_interface=captures,
         transactions_by_interface=transactions,
+        diagnostics_by_interface=diagnostics,
         full_property_state=full_state,
     )
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
