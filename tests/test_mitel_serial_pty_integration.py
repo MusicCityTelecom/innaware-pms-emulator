@@ -1,8 +1,12 @@
 import asyncio
 import os
-import pty
 
 import pytest
+
+if os.name != "nt":
+    import pty
+else:  # pragma: no cover - import guard for Windows collection
+    pty = None
 
 from innaware_pms_emulator.framing import ACK, ENQ, ETX, STX
 from innaware_pms_emulator.models import InterfaceConfig
@@ -61,6 +65,7 @@ async def _read_master(master_fd: int, minimum: int, timeout: float = 2.0) -> by
 
 def test_mitel_serial_runtime_over_real_pty_fragmentation_and_reopen_reset():
     async def exercise() -> None:
+        assert pty is not None
         master_fd, slave_fd = pty.openpty()
         slave_name = os.ttyname(slave_fd)
         os.close(slave_fd)
