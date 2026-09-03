@@ -87,7 +87,7 @@ def test_known_mitel_tcp_row_is_partial_capture_backed() -> None:
     assert "tests/test_mitel_tcp_session.py" in entry.deterministic_tests
 
 
-def test_mitel_serial_remains_distinct_and_partial() -> None:
+def test_mitel_serial_remains_distinct_partial_and_evidence_qualified() -> None:
     entry = find_compatibility(
         pbx_family="Mitel",
         pbx_dialect="legacy MTL-compatible",
@@ -99,7 +99,7 @@ def test_mitel_serial_remains_distinct_and_partial() -> None:
     assert entry.status is SupportStatus.PARTIAL
     assert entry.transport == "serial"
     assert entry.evidence_class is EvidenceClass.LEGACY_SOURCE_PROFILE
-    assert "not yet wired" in entry.notes
+    assert "TCP capture facts are not promoted to serial truth" in entry.notes
 
 
 def test_catalog_is_structured_for_api_cli_gui_consumers() -> None:
