@@ -39,9 +39,14 @@ Matrix `MICROS Opera / FIAS` over TCP remains `partial` based on operator-confir
 
 ### Fifth PBX family: Hitachi / Epitome
 
-Hitachi is now evidence-indexed rather than an evidence-free placeholder. Legacy PhoneSuite/Voiceware profile documentation explicitly identifies `EPIT-HIT` as an Epitome Hitachi-emulation interface used in Navy NGIS/Navy Lodge deployments and `EPIT-HIT2` as a room/name field-layout correction when check-ins fail.
+Hitachi is evidence-indexed rather than an evidence-free placeholder. Legacy PhoneSuite/Voiceware documentation explicitly identifies two Epitome-to-Hitachi profile variants:
 
-The six-dimensional row is deliberately still `planned`: `Hitachi × EPIT-HIT / Epitome Hitachi emulation × unknown transport × Epitome × EPIT-HIT × PMS_TO_PBX`. Its evidence class is `legacy_source_profile`. This establishes a genuine fifth-family integration lineage, but **does not** qualify transport, framing, control bytes, serial settings, byte-level record layouts, or reverse-direction behavior. A guessed `serial` or `tcp` row therefore still fails closed as `unsupported`.
+- `Hitachi × EPIT-HIT / Epitome Hitachi emulation × unknown transport × Epitome × EPIT-HIT × PMS_TO_PBX = planned / legacy_source_profile`
+- `Hitachi × EPIT-HIT2 / Epitome Hitachi room-name layout variant × unknown transport × Epitome × EPIT-HIT2 × PMS_TO_PBX = planned / legacy_source_profile`
+
+`EPIT-HIT` is documented as the default Epitome Hitachi-emulation interface used in Navy NGIS/Navy Lodge deployments. `EPIT-HIT2` is separately documented as the variant to use when normal check-ins fail because the room number and guest name do not appear where expected. Keeping these as separate matrix rows matters because `EPIT-HIT2` is an evidence-backed dialect/profile choice rather than an informal note attached to `EPIT-HIT`.
+
+Both rows deliberately retain `transport=unknown`. The general Voiceware setup material discusses serial PBX-interface configuration, but the available `EPIT-HIT`/`EPIT-HIT2` descriptions do not themselves bind either profile to a transport or serial settings. Neither row therefore qualifies framing, control bytes, baud/data/parity/stop values, byte-level record layout, checksum/BCC, or reverse-direction behavior. Guessed `serial` and `tcp` combinations fail closed as `unsupported`.
 
 ## Evidence ranking
 
