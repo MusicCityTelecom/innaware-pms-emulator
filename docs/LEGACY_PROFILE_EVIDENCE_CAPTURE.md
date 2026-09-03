@@ -70,6 +70,33 @@ python scripts/characterize-legacy-profile.py \
 
 Do **not** commit either raw profile file or an unreviewed characterization dump. Translate only the minimum interoperability facts needed for a synthetic/redacted fixture and document their source SHA-256 and evidence class in issue #4.
 
+## Compare a base profile with variants
+
+When the goal is to isolate the exact evidence-backed delta between a base profile and one or more compatibility variants, use the comparison CLI rather than diffing the raw vendor files. The comparator operates on the same sanitized characterization model, preserves both source SHA-256 values, and never emits values belonging to unknown profile or mask keys.
+
+In metadata-only mode it can safely show changes in recognized identity/control/serial fields and record or PBX-mask **key membership**, but it intentionally refuses to interpret missing layout values as a real layout difference. For exact recognized room/name-layout comparison, opt in explicitly:
+
+```bash
+python scripts/compare-legacy-profiles.py \
+  --include-record-layouts \
+  /path/to/psip-pbx-protocol.EPIT-HIT \
+  /path/to/psip-pbx-protocol.EPIT-HIT2 \
+  > /tmp/hitachi-profile-delta.json
+```
+
+A three-way characterization can keep `EPIT-HIT` as the baseline while comparing both Epitome and `EPIT-HIT2` independently:
+
+```bash
+python scripts/compare-legacy-profiles.py \
+  --include-record-layouts \
+  /path/to/psip-pbx-protocol.EPIT-HIT \
+  /path/to/psip-pbx-protocol.Epitome \
+  /path/to/psip-pbx-protocol.EPIT-HIT2 \
+  > /tmp/hitachi-profile-deltas.json
+```
+
+The comparison output reports source basenames and hashes, recognized field changes, record-key additions/removals, and—only with the opt-in—recognized record/PBX-mask layout changes. An unchanged or absent transport field remains `unknown`; the comparator never converts a layout delta into transport evidence. Review the JSON before sharing it and do not commit it wholesale merely because it was sanitized. Promote only the minimum facts needed for deterministic synthetic fixtures and six-dimensional compatibility claims.
+
 ## Promotion rule
 
 The Hitachi compatibility rows must stay `PLANNED` with `transport=unknown` until the profile evidence explicitly resolves those dimensions. A profile that explicitly declares transport/control/layout facts can justify a narrower `PARTIAL` claim and deterministic synthetic fixture. A `[pbx-masks]` difference alone can justify a narrower layout-variant characterization but must not be treated as transport evidence. None of these source-profile facts justify reverse-direction behavior, timing/retry semantics, or hardware interoperability unless those are separately evidenced.
