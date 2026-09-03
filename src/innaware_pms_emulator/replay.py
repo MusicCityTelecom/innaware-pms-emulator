@@ -125,6 +125,7 @@ class ReplayFixture:
     sanitized: bool
     evidence: str
     steps: tuple[ReplayStep, ...]
+    environment: dict[str, Any] = field(default_factory=dict)
 
 
 def bytes_from_step(value: dict[str, Any]) -> bytes | None:
@@ -167,6 +168,7 @@ def fixture_from_dict(value: dict[str, Any]) -> ReplayFixture:
         sanitized=True,
         evidence=value["evidence"],
         steps=steps,
+        environment=dict(value.get("environment", {})),
     )
 
 
