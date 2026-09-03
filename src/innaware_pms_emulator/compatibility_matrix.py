@@ -130,8 +130,9 @@ COMPATIBILITY_MATRIX: tuple[CompatibilityEntry, ...] = (
             "tests/test_phonesuite_serial_characterization.py",
             "tests/test_phonesuite_serial_session.py",
             "tests/test_phonesuite_serial_runtime_integration.py",
+            "tests/test_phonesuite_serial_pty_integration.py",
         ),
-        notes="Clean-room simulator-backed ENQ/ACK and STX/ETX CHK/NAM characterization now has a dedicated PhoneSuite session adapter and live serial runtime selection. Serial settings remain operator-configured because PhoneSuite-specific defaults and real-hardware timing/retry behavior are not yet evidence-qualified; Series2 TDMoE/PRI station programming remains out of scope.",
+        notes="Clean-room simulator-backed ENQ/ACK and STX/ETX CHK/NAM characterization has a dedicated PhoneSuite session, live serial runtime selection, and Linux PTY fragmentation/coalescing/reopen/control-routing coverage. Serial settings remain operator-configured because PhoneSuite-specific defaults and real-hardware timing/retry behavior are not yet evidence-qualified; Series2 TDMoE/PRI station programming remains out of scope.",
     ),
     CompatibilityEntry(
         pbx_family="Matrix",
