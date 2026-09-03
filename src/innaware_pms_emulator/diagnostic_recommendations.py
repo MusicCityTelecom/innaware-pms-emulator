@@ -54,23 +54,35 @@ def remediation_plan(report: DiagnosticReport) -> list[dict[str, Any]]:
             ],
         })
 
-    if "matrix-sarvam-opera-signature" in by_id and report.personality_id != "pbx-matrix-sarvam-opera":
+    # Matrix is the remote PBX for the dedicated PMS-side profile. Do not rewrite
+    # InnAware's `personality_id` to a PBX identity: endpoint identity and wire
+    # protocol are separate dimensions. If the interface already uses the known
+    # FIAS + STX/ETX wire boundary, no additional Matrix-profile remediation is
+    # needed solely because the fingerprint detector also recognized the LS frame.
+    matrix_wire_already_selected = (
+        report.protocol == "FIAS"
+        and report.configured_framing == "stx_etx"
+    )
+    if "matrix-sarvam-opera-signature" in by_id and not matrix_wire_already_selected:
         plan.append({
             "id": "consider-matrix-sarvam-personality",
-            "title": "Consider the Matrix SARVAM MICROS Opera personality",
+            "title": "Consider the Matrix SARVAM MICROS Opera peer profile",
             "reason": "The capture matches the field-observed PBX-to-PMS STX/ETX FIAS Link Start signature.",
             "risk": "medium",
             "requires_operator_confirmation": True,
             "requires_reconnect": True,
             "configuration_patch": {
                 "protocol": "FIAS",
-                "personality_id": "pbx-matrix-sarvam-opera",
+                "peer_personality_id": "pbx-matrix",
                 "options": {"framing": "stx_etx"},
             },
-            "caveat": "The wire signature is not globally unique. Confirm the connected product before applying a vendor personality.",
+            "caveat": (
+                "The wire signature is not globally unique. Confirm the connected product before applying "
+                "a remote PBX personality. This patch identifies the peer; it does not change what InnAware is emulating."
+            ),
             "validate_after": [
-                "Confirm the physical/remote PBX is Matrix SARVAM UCS in MICROS Opera mode.",
-                "Verify link negotiation and keepalive behavior against a sanitized Matrix fixture.",
+                "Confirm the remote PBX is Matrix SARVAM UCS in MICROS Opera mode.",
+                "Capture the next Matrix-originated link records after LS; do not assume a generic FIAS LD/LR/LA order until Matrix-specific evidence is observed.",
             ],
         })
 

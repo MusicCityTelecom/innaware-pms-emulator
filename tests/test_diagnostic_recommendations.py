@@ -1,5 +1,12 @@
 from innaware_pms_emulator.diagnostic_recommendations import remediation_plan
 from innaware_pms_emulator.diagnostics import diagnose_interface
+from innaware_pms_emulator.profiles import build_interface_from_profile
+
+
+MATRIX_LS = {
+    "direction": "rx",
+    "hex": "02 4c 53 7c 44 41 32 36 30 39 30 31 7c 54 49 30 30 30 30 30 30 7c 03",
+}
 
 
 def test_matrix_mismatch_produces_reviewable_config_plan():
@@ -10,10 +17,7 @@ def test_matrix_mismatch_produces_reviewable_config_plan():
             "options": {"framing": "crlf"},
         },
         [
-            {
-                "direction": "rx",
-                "hex": "02 4c 53 7c 44 41 32 36 30 39 30 31 7c 54 49 30 30 30 30 30 30 7c 03",
-            },
+            MATRIX_LS,
             {
                 "direction": "tx",
                 "hex": "4c 53 7c 44 41 32 36 30 39 30 31 7c 54 49 30 30 30 30 30 31 7c 0d 0a",
@@ -31,8 +35,31 @@ def test_matrix_mismatch_produces_reviewable_config_plan():
     assert by_id["match-peer-framing"]["requires_reconnect"] is True
 
     personality = by_id["consider-matrix-sarvam-personality"]
-    assert personality["configuration_patch"]["personality_id"] == "pbx-matrix-sarvam-opera"
+    assert personality["configuration_patch"] == {
+        "protocol": "FIAS",
+        "peer_personality_id": "pbx-matrix",
+        "options": {"framing": "stx_etx"},
+    }
+    assert "personality_id" not in personality["configuration_patch"]
+    assert "does not change what InnAware is emulating" in personality["caveat"]
+    assert "do not assume a generic FIAS LD/LR/LA order" in personality["validate_after"][1]
     assert personality["risk"] == "medium"
+
+
+def test_dedicated_matrix_profile_does_not_recommend_rewriting_endpoint_identity():
+    config = build_interface_from_profile(
+        "matrix-micros-opera-fias-tcp-server",
+        name="matrix-qualified-wire",
+        enabled=False,
+    )
+    report = diagnose_interface(config, [MATRIX_LS])
+    plan_ids = {item["id"] for item in remediation_plan(report)}
+
+    assert config.peer_personality_id == "pbx-matrix"
+    assert config.personality_id is None
+    assert config.protocol == "FIAS"
+    assert config.options["framing"] == "stx_etx"
+    assert "consider-matrix-sarvam-personality" not in plan_ids
 
 
 def test_protocol_mismatch_suggests_fias_without_silent_apply():

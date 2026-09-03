@@ -43,6 +43,12 @@ A successful TCP connection is only transport connectivity. Receiving the observ
 
 Do not send guest transactions merely because the socket is open. Link progression beyond the observed `LS` remains qualified by generic FIAS implementation behavior until Matrix-specific evidence establishes the exact SARVAM progression.
 
+### Project-source boundary review
+
+Project Sources contain generic/vendor FIAS references that demonstrate common `LS`, `LD`, `LR`, and `LA` link-control records and legacy runtime logs that exercised a generic FIAS negotiation sequence. Those sources are useful for understanding the FIAS family, but they are **not Matrix SARVAM evidence**. No Matrix-specific sanitized source currently qualifies the exact post-`LS` order, retry timing, record-set negotiation, or activation transition.
+
+Accordingly, generic FIAS `LD/LR/LA` behavior must not be promoted into the Matrix compatibility row. The next evidence gain must come from a Matrix-tied capture or operator-confirmed Matrix runtime observation associated with an exact InnAware commit SHA.
+
 ## Technician diagnostics
 
 The smart diagnostic layer already distinguishes application records from framing. For this profile, a capture containing inbound STX/ETX `LS` and outbound CRLF `LS` should raise the framing findings:
@@ -52,6 +58,8 @@ The smart diagnostic layer already distinguishes application records from framin
 - `fias-link-start-framing-mismatch`
 
 The corrective action is to select the Matrix MICROS Opera profile or explicitly configure STX/ETX framing, then retest link negotiation before troubleshooting room/guest payloads.
+
+Remediation also preserves endpoint identity. On a PMS-side InnAware interface, Matrix is the **remote peer**, so a Matrix recommendation sets `peer_personality_id=pbx-matrix`; it must not rewrite InnAware's own `personality_id` to a PBX identity. If FIAS plus STX/ETX is already selected, observing the Matrix-like `LS` fingerprint alone does not justify another personality rewrite.
 
 ## Explicitly unqualified behavior
 
@@ -79,6 +87,8 @@ Those items require new sanitized evidence before the compatibility matrix is ex
 4. the diagnostic engine detects the known CRLF-vs-STX/ETX failure mode;
 5. the dedicated profile removes that known framing mismatch.
 
+`tests/test_diagnostic_recommendations.py` additionally verifies that Matrix remediation identifies the remote PBX through `peer_personality_id`, never overwrites InnAware's own endpoint personality, and does not produce a redundant Matrix-personality recommendation when the dedicated FIAS/STX-ETX wire profile is already selected.
+
 The six-dimensional compatibility row remains **PARTIAL**.
 
 ## Safe live acceptance procedure
@@ -91,7 +101,7 @@ git checkout feature/pbx-emulation-v0.4.0
 git status --short --branch
 git rev-parse HEAD
 git diff --check
-python -m pytest -q tests/test_matrix_sarvam_characterization.py tests/test_compatibility_matrix.py tests/test_diagnostics.py tests/test_protocols.py
+python -m pytest -q tests/test_matrix_sarvam_characterization.py tests/test_diagnostic_recommendations.py tests/test_compatibility_matrix.py tests/test_diagnostics.py tests/test_protocols.py
 ```
 
 For Server3 isolation, use the repository verifier rather than reusing a production interface:
@@ -101,3 +111,5 @@ INNAWARE_PMS_REPO_DIR=/opt/innaware/innaware-pms-emulator bash scripts/verify-se
 ```
 
 If a real Matrix is available, create a temporary PMS interface from `matrix-micros-opera-fias-tcp-server`, override the listen port to the site's configured value, and use synthetic room/guest actions only after link negotiation is demonstrably active. Preserve the exact commit SHA, interface configuration, and sanitized wire bytes with any new evidence. Never commit live guest data, credentials, customer addresses, or proprietary vendor files.
+
+For the next Matrix evidence capture, stop after the protocol link exchange if possible: record the Matrix-originated bytes immediately after the STX/ETX `LS`, the InnAware response bytes, connection direction, and any subsequent Matrix link-control records. Do not enable ENQ/ACK or synthesize generic `LD/LR/LA` traffic merely to make the session advance; the purpose of this capture is to discover the Matrix-specific progression, not to force a generic FIAS model onto it.
