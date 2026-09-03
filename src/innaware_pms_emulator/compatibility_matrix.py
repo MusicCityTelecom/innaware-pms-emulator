@@ -115,7 +115,23 @@ COMPATIBILITY_MATRIX: tuple[CompatibilityEntry, ...] = (
             "tests/test_mitel_serial_runtime_integration.py",
             "tests/test_mitel_serial_pty_integration.py",
         ),
-        notes="Serial session, live runtime, Linux PTY framing/reopen, and outbound ENQ/ACK/NAK transaction paths are deterministic-tested; real PBX hardware and broader model/timing evidence remain incomplete. TCP capture facts are not promoted to serial truth.",
+        notes="Legacy-profile-backed serial application lineage with a separate serial state machine, live runtime, Linux PTY framing/reopen, and outbound ENQ/ACK/NAK transaction paths. Real PBX hardware and broader model/timing evidence remain incomplete. TCP capture facts are not promoted to serial truth.",
+    ),
+    CompatibilityEntry(
+        pbx_family="Mitel",
+        pbx_dialect="legacy MTL-compatible",
+        transport="serial",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.PMS_TO_PBX,
+        status=SupportStatus.PARTIAL,
+        evidence_class=EvidenceClass.SIMULATOR_CHARACTERIZATION,
+        deterministic_tests=(
+            "tests/test_mitel_serial_session.py",
+            "tests/test_mitel_serial_runtime_integration.py",
+            "tests/test_mitel_serial_pty_integration.py",
+        ),
+        notes="A clean-room serial PBX simulator explicitly observed PMS-originated ENQ -> ACK followed by STX CHK1/CHK0 ETX -> ACK, while the independent serial session/runtime/PTY tests preserve the same receive-side transaction boundary. The observed lab serial parameters are characterization data, not universal Mitel defaults; profile/site serial settings remain separately configurable. Public Mitel application-protocol timing/retry material does not itself qualify a transport, and no TCP capture fact is promoted into this serial row.",
     ),
     CompatibilityEntry(
         pbx_family="PhoneSuite",
@@ -145,10 +161,13 @@ COMPATIBILITY_MATRIX: tuple[CompatibilityEntry, ...] = (
         evidence_class=EvidenceClass.LEGACY_SOURCE_PROFILE,
         deterministic_tests=(
             "tests/test_phonesuite_pms_policy.py",
+            "tests/test_phonesuite_pms_format_diagnostics.py",
+            "tests/test_phonesuite_pms_source_extensions.py",
+            "tests/test_phonesuite_capture_diagnostics.py",
             "tests/test_phonesuite_serial_runtime_integration.py",
             "tests/test_phonesuite_serial_pty_integration.py",
         ),
-        notes="Legacy PhoneSuite/Voiceware PMS-interface documentation explicitly permits the PMS as sender and PhoneSuite as receiver using ENQ/ACK plus STX/message/ETX, and explicitly defines PMS-to-PhoneSuite CHK1/CHK0. It also qualifies the receive-side 0.100-second ENQ-ACK-to-STX, inter-character, and ETX timing boundaries plus late-data NAK behavior. Existing serial characterization/runtime tests qualify the serial transport path, but PhoneSuite-specific baud/parity/data/stop/flow defaults, retry policy, optional-checksum use, and broader PMS command families remain unqualified. Do not import Mitel TCP three-second/retry semantics or Series2 TDMoE/PRI behavior into this row.",
+        notes="Legacy PhoneSuite/Voiceware PMS-interface documentation explicitly qualifies PMS-to-PhoneSuite ENQ/ACK plus STX/message/ETX, receive-side 0.100-second timing boundaries, and source-backed CHK/NAM/LMT/DND/GRP/LNG/MW/RST/AREYUTHERE/GRS/END application forms. Direct manual evidence additionally qualifies PMS-originated MSG/DID/VIP/WKP forms; the separately documented PhoneSuite-to-PMS MSG2 record remains direction-distinct and is not generalized from the shared MSG prefix. Deterministic capture/format diagnostics are endpoint- and direction-gated. PhoneSuite-specific baud/parity/data/stop/flow defaults, retry policy, and optional-checksum algorithm/placement remain unqualified. Do not import Mitel TCP three-second/retry semantics or Series2 TDMoE/PRI behavior into this row.",
     ),
     CompatibilityEntry(
         pbx_family="Matrix",
@@ -303,13 +322,32 @@ def find_compatibility(
     )
 
 
-def validate_supported_test_coverage(known_test_paths: Iterable[str]) -> list[str]:
+def validate_declared_test_coverage(
+    known_test_paths: Iterable[str],
+    *,
+    statuses: Iterable[SupportStatus] = (SupportStatus.PARTIAL, SupportStatus.SUPPORTED),
+) -> list[str]:
+    """Return declared deterministic test paths missing from the supplied test set.
+
+    PARTIAL rows are included by default because they are implementation claims even
+    though their evidence boundary is intentionally incomplete. PLANNED rows may have
+    no wire tests and are therefore excluded unless explicitly requested.
+    """
+
     known = set(known_test_paths)
+    checked_statuses = set(statuses)
     missing: list[str] = []
     for entry in COMPATIBILITY_MATRIX:
-        if entry.status is not SupportStatus.SUPPORTED:
+        if entry.status not in checked_statuses:
             continue
         for test_path in entry.deterministic_tests:
             if test_path not in known:
                 missing.append(test_path)
     return sorted(set(missing))
+
+
+def validate_supported_test_coverage(known_test_paths: Iterable[str]) -> list[str]:
+    return validate_declared_test_coverage(
+        known_test_paths,
+        statuses=(SupportStatus.SUPPORTED,),
+    )
