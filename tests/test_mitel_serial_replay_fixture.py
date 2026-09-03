@@ -62,7 +62,7 @@ def test_mitel_serial_fixture_replays_pms_to_pbx_enq_chk_transactions():
         if step.direction != "rx" or step.raw is None:
             continue
         result = session.feed(step.raw)
-        generated.extend(action.data for action in result.actions)
+        generated.extend(action.payload for action in result.actions)
         observed_records.extend(record.opcode for record in result.records)
         if step.expect_state is not None:
             assert session.status()["state"] == step.expect_state
