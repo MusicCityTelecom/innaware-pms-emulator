@@ -120,6 +120,26 @@ Detect likely field-level problems after transport/framing/session health is acc
 - posting request without a posting response;
 - room move missing old/new room relationship.
 
+#### PhoneSuite PMS→PBX source-backed format diagnostics
+
+The PhoneSuite PMS policy has a dedicated format-diagnostic layer for the command subset explicitly described by historical PhoneSuite/Voiceware PMS-interface documentation. It is intentionally separate from the simulator-characterized PhoneSuite PBX→PMS row and from physical serial configuration.
+
+Current deterministic checks include:
+
+- `CHK0`/`CHK1`: command separation, 3- or 4-digit extension syntax, and the documented 20-character maximum for an optional `CHK1` guest name;
+- `LMT`: extension syntax and the documented decimal credit-limit shape through `999.99`, with optional `$`;
+- `DND0`/`DND1`: documented status and extension shape;
+- `GRP`: extension syntax plus the documented letters/numbers group-code field and 10-character boundary;
+- `LNG`: exactly two lowercase language-code letters immediately after `LNG`, followed directly by a 3- or 4-digit extension;
+- `MW 0`/`MW 1`: status validation and the explicitly documented requirement for exactly one space between `MW` and the status digit;
+- `RSTn`: restriction code adjacency and extension syntax;
+- `NAM1` through `NAM4`: immediate numeric index, required name/extension placement, and the documented 20-character name limit;
+- `AREYUTHERE`, `GRS`, and `END`: exact application-control records without appended arguments.
+
+These findings use `legacy_source_profile` provenance and describe the observed field, expected source-backed shape, and a corrective action. A syntactically valid three- or four-digit extension is **not** treated as proof that the extension exists at the property; property membership is a separate state/configuration check.
+
+The format helper deliberately returns no directional-format finding for `MOV`, `MSGn`, `STSn`, `RQINZ`, or unknown commands because their PMS→PhoneSuite direction is not qualified by the current source boundary. It also does not select a transport, supply baud/parity/data/stop defaults, add a checksum, invent a retry policy, or silently switch profiles. Format errors are application-layer findings and must not be “fixed” by changing serial/TCP transport settings.
+
 ### 8. Property/state divergence
 
 When bound to the property-state model, compare wire traffic with expected state:
@@ -246,7 +266,7 @@ A technician can then save sanitized observations as a development fixture witho
 
 ## Initial implemented rules
 
-The first diagnostics engine on the v0.4.0 feature branch detects:
+The diagnostics surface on the v0.4.0 feature branch now includes:
 
 - FIAS traffic with a non-FIAS configured adapter;
 - configured framing vs observed peer framing mismatch;
@@ -258,6 +278,8 @@ The first diagnostics engine on the v0.4.0 feature branch detects:
 - invalid XOR BCC;
 - CRLF embedded inside framed FIAS when the peer does not use it;
 - TCP coalescing evidence;
-- field-observed Matrix SARVAM MICROS Opera signature candidate.
+- field-observed Matrix SARVAM MICROS Opera signature candidate;
+- PhoneSuite PMS→PBX source-backed receive-timing findings;
+- PhoneSuite PMS→PBX source-backed command-format findings for the qualified application subset.
 
 These rules are only the foundation. The intended product is a layered troubleshooting engine that explains transport, framing, handshake, protocol, personality, timing, and property-state behavior together.
