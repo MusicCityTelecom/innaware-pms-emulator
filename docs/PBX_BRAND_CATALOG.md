@@ -40,7 +40,9 @@ Examples of selectable profile variants underneath these brands include:
 
 Hitachi is modeled as a separate hospitality protocol family.
 
-Do not silently substitute a Mitel adapter when the technician selects Hitachi. Until sanitized field captures or fixtures characterize the exact target, Hitachi should operate in capture/learn maturity with explicit diagnostics that its wire profile is not yet proven.
+Legacy PhoneSuite/Voiceware documentation identifies `EPIT-HIT` as an Epitome Hitachi-emulation interface and `EPIT-HIT2` as a room/name-layout correction used when normal check-ins fail. That is sufficient to index a real Hitachi/Epitome integration lineage, but not to qualify byte-level wire behavior.
+
+Hitachi therefore remains **evidence-indexed and wire-unqualified**. Do not silently substitute a Mitel adapter, serial transport, TCP transport, framing mode, control-byte handshake, checksum method, or serial settings when the technician selects Hitachi. Until a sanitized profile definition or field capture supplies those facts, the wizard should require explicit capture/characterization rather than fabricate a working default.
 
 ## Matrix
 
@@ -59,7 +61,11 @@ Field observation from a live SARVAM UCS in MICROS Opera mode showed FIAS `LS` i
 
 `Voiceware` should be treated as a PhoneSuite compatibility/product-era profile where relevant to the observed interface behavior, not as a separate PBX manufacturer in the technician-facing brand list.
 
-The existing field-observed OperaIP/Voiceware behavior remains useful and should remain selectable under PhoneSuite alongside Mitel-family profiles.
+The existing field-observed OperaIP/Voiceware behavior remains useful and should remain selectable under PhoneSuite alongside Mitel-family application profiles.
+
+PhoneSuite serial is a separate evidence boundary from generic Mitel serial. The current clean-room PhoneSuite characterization supports the dedicated ENQ/ACK plus STX/ETX `CHK0`, `CHK1`, and `NAM2` path, but it does **not** qualify PhoneSuite-specific baud rate, data bits, parity, stop bits, or flow control. For that reason the PhoneSuite personality intentionally has no automatically recommended serial profile. A technician may explicitly choose a Mitel-family profile when appropriate for a site, but its `1200/8/N/1/XON-XOFF` defaults remain Mitel-profile defaults rather than PhoneSuite evidence.
+
+Series2/Voiceware TDMoE, PRI, Q.921/Q.931, D-channel, or `0x0E` station-programming behavior remains outside this PBX↔PMS serial/application evidence boundary.
 
 ## Interface wizard hierarchy
 
