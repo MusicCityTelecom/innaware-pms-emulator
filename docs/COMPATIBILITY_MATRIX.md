@@ -27,7 +27,15 @@ Mitel `MITEL 1 / iPocket-characterized` over TCP remains `partial` and packet-ca
 
 ### Mitel serial
 
-Mitel `legacy MTL-compatible` serial remains a distinct `partial` row using legacy source/profile evidence. It has a separate serial state machine, live pyserial routing, Linux POSIX PTY framing/reopen coverage, and outbound ENQ/ACK/NAK transaction tests. The row remains partial because real-PBX model coverage and broader timing evidence are incomplete. TCP capture facts are not used as proof of serial behavior.
+Mitel `legacy MTL-compatible` serial remains **distinct from Mitel TCP and is now explicitly direction-indexed** rather than relying on one serial row to imply both directions.
+
+`Mitel × legacy MTL-compatible × serial × legacy-hotel-pms × mitel-hospitality × PBX_TO_PMS` remains `partial / legacy_source_profile`. The legacy-profile lineage has a separate serial state machine, live pyserial routing, Linux POSIX PTY framing/reopen coverage, and outbound ENQ/ACK/NAK transaction tests. Real-PBX model coverage and broader timing evidence remain incomplete. TCP capture facts are not used as proof of serial behavior.
+
+`Mitel × legacy MTL-compatible × serial × legacy-hotel-pms × mitel-hospitality × PMS_TO_PBX` is separately registered as `partial / simulator_characterization`. A clean-room serial PBX simulator explicitly observed PMS-originated `ENQ -> ACK`, followed by `STX CHK1/CHK0 ETX -> ACK`. Independent serial session/runtime/PTY tests preserve the same receive-side boundary, including fragmented/coalesced reads, ENQ gating, ACK/NAK routing, close/reopen state reset, and serial-only runtime selection.
+
+The simulator observation used an explicit lab serial configuration, but that configuration is characterization data rather than a universal Mitel serial default. Legacy deployments and profiles can use different baud settings. Likewise, public Mitel application-protocol material that documents a three-second ACK window and bounded record retries does not itself identify a physical transport, so those application timing facts are not used to manufacture serial transport evidence. The TCP packet capture remains a separate evidence row.
+
+An aggregate serial `BIDIRECTIONAL` row is intentionally absent. Consumers must query the exact direction so legacy-profile provenance and clean-room simulator provenance remain visible instead of being silently collapsed into one stronger claim.
 
 ### PhoneSuite serial
 
@@ -78,7 +86,7 @@ Inference alone can never satisfy a `supported` claim. Test harnesses such as lo
 
 A `supported` row must list deterministic test paths. Unit tests enforce this contract and also verify that unknown combinations fail closed. This makes the compatibility matrix suitable for later CLI/API/GUI presentation without turning auto-detection into auto-configuration.
 
-For `partial` rows, deterministic test paths should still be recorded as coverage is added so the matrix documents what software behavior has actually been exercised without overstating evidence maturity.
+`partial` rows also declare the deterministic tests that exercise their implemented behavior. The matrix audit now verifies that every test path declared by a `partial` or `supported` row actually exists in the current checkout, preventing stale documentation/claim references from surviving a rename or refactor. This existence check does not promote evidence or make a partial row supported.
 
 For `planned` evidence-indexed rows such as Hitachi/Epitome, deterministic tests may validate the claim boundary itself while wire-level tests remain absent. The absence of a wire fixture must remain visible and must not be converted into an inferred transport or framing choice.
 
