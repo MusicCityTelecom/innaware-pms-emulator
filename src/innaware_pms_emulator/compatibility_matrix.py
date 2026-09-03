@@ -151,14 +151,14 @@ COMPATIBILITY_MATRIX: tuple[CompatibilityEntry, ...] = (
     ),
     CompatibilityEntry(
         pbx_family="Hitachi",
-        pbx_dialect="HITACHI",
+        pbx_dialect="EPIT-HIT / Epitome Hitachi emulation",
         transport="unknown",
-        pms_family="unknown",
-        pms_protocol="unknown",
-        direction=Direction.BIDIRECTIONAL,
+        pms_family="Epitome",
+        pms_protocol="EPIT-HIT",
+        direction=Direction.PMS_TO_PBX,
         status=SupportStatus.PLANNED,
-        evidence_class=EvidenceClass.NONE,
-        notes="Fifth PBX family placeholder selected from the existing catalog; no wire-level compatibility is claimed until sanitized evidence exists.",
+        evidence_class=EvidenceClass.LEGACY_SOURCE_PROFILE,
+        notes="Legacy PhoneSuite/Voiceware profile documentation explicitly identifies EPIT-HIT as an Epitome Hitachi-emulation interface and EPIT-HIT2 as a room/name field-layout correction for failed check-ins. This establishes a real fifth-family integration lineage but does not qualify transport, framing, control bytes, serial parameters, exact record layouts, or reverse-direction behavior; no wire-level compatibility is claimed yet.",
     ),
 )
 
