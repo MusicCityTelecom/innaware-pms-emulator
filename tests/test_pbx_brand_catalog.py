@@ -50,6 +50,14 @@ def test_phonesuite_retains_voiceware_operaip_as_profile_variant():
     assert "OPERAIP_FIAS" in phonesuite.protocols
 
 
+def test_phonesuite_does_not_auto_inherit_mitel_serial_defaults():
+    phonesuite = PERSONALITIES["pbx-phonesuite"]
+    assert phonesuite.recommended_profile is None
+    assert phonesuite.defaults == {}
+    assert any("No serial profile is auto-recommended" in note for note in phonesuite.notes)
+    assert any("Mitel serial defaults" in note for note in phonesuite.notes)
+
+
 def test_matrix_exposes_mitel_and_matrix_specific_modes():
     matrix = PERSONALITIES["pbx-matrix"]
     assert {"MITEL 1", "MITEL 2", "FIAS"} <= set(matrix.protocols)
