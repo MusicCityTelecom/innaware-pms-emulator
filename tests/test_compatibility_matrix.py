@@ -10,6 +10,7 @@ from innaware_pms_emulator.compatibility_matrix import (
     SupportStatus,
     compatibility_catalog,
     find_compatibility,
+    validate_declared_test_coverage,
     validate_supported_test_coverage,
 )
 
@@ -102,6 +103,25 @@ def test_mitel_serial_remains_distinct_partial_and_evidence_qualified() -> None:
     assert "TCP capture facts are not promoted to serial truth" in entry.notes
 
 
+def test_mitel_serial_pms_to_pbx_is_separate_simulator_characterized_row() -> None:
+    entry = find_compatibility(
+        pbx_family="Mitel",
+        pbx_dialect="legacy MTL-compatible",
+        transport="serial",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.PMS_TO_PBX,
+    )
+    assert entry.status is SupportStatus.PARTIAL
+    assert entry.transport == "serial"
+    assert entry.evidence_class is EvidenceClass.SIMULATOR_CHARACTERIZATION
+    assert "PMS-originated ENQ" in entry.notes
+    assert "not universal Mitel defaults" in entry.notes
+    assert "no TCP capture fact" in entry.notes
+    assert "tests/test_mitel_serial_session.py" in entry.deterministic_tests
+    assert "tests/test_mitel_serial_pty_integration.py" in entry.deterministic_tests
+
+
 def test_phonesuite_serial_keeps_direction_specific_evidence_rows() -> None:
     pbx_to_pms = find_compatibility(
         pbx_family="PhoneSuite",
@@ -127,7 +147,11 @@ def test_phonesuite_serial_keeps_direction_specific_evidence_rows() -> None:
     assert pms_to_pbx.status is SupportStatus.PARTIAL
     assert pms_to_pbx.evidence_class is EvidenceClass.LEGACY_SOURCE_PROFILE
     assert "tests/test_phonesuite_pms_policy.py" in pms_to_pbx.deterministic_tests
+    assert "tests/test_phonesuite_pms_source_extensions.py" in pms_to_pbx.deterministic_tests
+    assert "tests/test_phonesuite_capture_diagnostics.py" in pms_to_pbx.deterministic_tests
     assert "0.100-second" in pms_to_pbx.notes
+    assert "MSG/DID/VIP/WKP" in pms_to_pbx.notes
+    assert "PhoneSuite-to-PMS MSG2" in pms_to_pbx.notes
     assert "retry policy" in pms_to_pbx.notes
     assert "Mitel TCP three-second/retry semantics" in pms_to_pbx.notes
 
@@ -216,6 +240,13 @@ def test_catalog_is_structured_for_api_cli_gui_consumers() -> None:
     }
 
 
+def _known_test_paths() -> set[str]:
+    return {str(path).replace("\\", "/") for path in Path("tests").glob("test_*.py")}
+
+
+def test_partial_and_supported_rows_reference_existing_declared_test_files() -> None:
+    assert validate_declared_test_coverage(_known_test_paths()) == []
+
+
 def test_any_supported_rows_reference_existing_test_files() -> None:
-    test_paths = {str(path).replace("\\", "/") for path in Path("tests").glob("test_*.py")}
-    assert validate_supported_test_coverage(test_paths) == []
+    assert validate_supported_test_coverage(_known_test_paths()) == []
