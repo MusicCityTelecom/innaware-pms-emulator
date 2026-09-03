@@ -128,6 +128,33 @@ def test_phonesuite_serial_claim_is_limited_to_characterized_pbx_to_pms_directio
     assert unqualified_reverse.evidence_class is EvidenceClass.NONE
 
 
+def test_hitachi_fifth_family_is_evidence_indexed_but_not_wire_claimed() -> None:
+    entry = find_compatibility(
+        pbx_family="Hitachi",
+        pbx_dialect="EPIT-HIT / Epitome Hitachi emulation",
+        transport="unknown",
+        pms_family="Epitome",
+        pms_protocol="EPIT-HIT",
+        direction=Direction.PMS_TO_PBX,
+    )
+    assert entry.status is SupportStatus.PLANNED
+    assert entry.evidence_class is EvidenceClass.LEGACY_SOURCE_PROFILE
+    assert entry.deterministic_tests == ()
+    assert "EPIT-HIT2" in entry.notes
+    assert "no wire-level compatibility is claimed" in entry.notes
+
+    guessed_serial = find_compatibility(
+        pbx_family="Hitachi",
+        pbx_dialect="EPIT-HIT / Epitome Hitachi emulation",
+        transport="serial",
+        pms_family="Epitome",
+        pms_protocol="EPIT-HIT",
+        direction=Direction.PMS_TO_PBX,
+    )
+    assert guessed_serial.status is SupportStatus.UNSUPPORTED
+    assert guessed_serial.evidence_class is EvidenceClass.NONE
+
+
 def test_catalog_is_structured_for_api_cli_gui_consumers() -> None:
     catalog = compatibility_catalog()
     assert catalog
