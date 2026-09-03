@@ -15,6 +15,12 @@ from innaware_pms_emulator.legacy_profile_compare import compare_legacy_profile_
 from innaware_pms_emulator.legacy_profile_evidence import characterize_legacy_profile_file
 
 
+def _safe_error(exc: OSError | ValueError) -> str:
+    if isinstance(exc, OSError):
+        return "profile could not be read"
+    return str(exc)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
@@ -49,7 +55,7 @@ def main() -> int:
         json.dump(
             {
                 "baseline": baseline_path.name,
-                "error": str(exc),
+                "error": _safe_error(exc),
                 "comparisons": [],
             },
             sys.stdout,
@@ -74,7 +80,7 @@ def main() -> int:
             comparisons.append(
                 {
                     "candidate_source_name": candidate_path.name,
-                    "error": str(exc),
+                    "error": _safe_error(exc),
                 }
             )
             continue
