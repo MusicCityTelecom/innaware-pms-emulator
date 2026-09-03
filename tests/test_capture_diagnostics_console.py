@@ -31,7 +31,13 @@ def test_capture_analysis_console_is_read_only_and_uses_bounded_report_api():
 
 
 def test_capture_analysis_page_is_get_only_and_linked_from_operator_console():
-    route = next(route for route in app.routes if route.path == "/capture-diagnostics")
+    # Newer FastAPI/Starlette versions can retain an internal _IncludedRouter
+    # sentinel in app.routes. Only APIRoute-like entries expose .path/.methods.
+    route = next(
+        route
+        for route in app.routes
+        if getattr(route, "path", None) == "/capture-diagnostics"
+    )
 
     assert route.methods == {"GET"}
     operator_page = index()
