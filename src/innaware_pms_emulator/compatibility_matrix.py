@@ -123,7 +123,7 @@ COMPATIBILITY_MATRIX: tuple[CompatibilityEntry, ...] = (
         transport="serial",
         pms_family="legacy-hotel-pms",
         pms_protocol="mitel-hospitality",
-        direction=Direction.BIDIRECTIONAL,
+        direction=Direction.PBX_TO_PMS,
         status=SupportStatus.PARTIAL,
         evidence_class=EvidenceClass.SIMULATOR_CHARACTERIZATION,
         deterministic_tests=(
@@ -132,7 +132,7 @@ COMPATIBILITY_MATRIX: tuple[CompatibilityEntry, ...] = (
             "tests/test_phonesuite_serial_runtime_integration.py",
             "tests/test_phonesuite_serial_pty_integration.py",
         ),
-        notes="Clean-room simulator-backed ENQ/ACK and STX/ETX CHK/NAM characterization has a dedicated PhoneSuite session, live serial runtime selection, and Linux PTY fragmentation/coalescing/reopen/control-routing coverage. Serial settings remain operator-configured because PhoneSuite-specific defaults and real-hardware timing/retry behavior are not yet evidence-qualified; Series2 TDMoE/PRI station programming remains out of scope.",
+        notes="Clean-room simulator-backed PBX-to-PMS ENQ/ACK and STX/ETX CHK/NAM characterization has a dedicated PhoneSuite session, live serial runtime selection, and Linux PTY fragmentation/coalescing/reopen/control-routing coverage. Serial settings remain operator-configured because PhoneSuite-specific defaults, PMS-to-PBX application semantics, and real-hardware timing/retry behavior are not yet evidence-qualified; Series2 TDMoE/PRI station programming remains out of scope.",
     ),
     CompatibilityEntry(
         pbx_family="Matrix",
