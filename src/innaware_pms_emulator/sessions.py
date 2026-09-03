@@ -12,6 +12,7 @@ from .framing import ACK, ENQ, NAK, FramingMode, control_name, encode_frame
 from .mitel_serial_session import MitelSerialSessionStateMachine
 from .mitel_session import MitelSessionDiagnostic, MitelTcpSessionStateMachine
 from .models import InterfaceConfig, TransportMode
+from .phonesuite_serial_session import PhoneSuiteSerialSessionStateMachine
 from .property_state import property_manager
 from .state import CallAccountingStateMachine, EngineAction, FiasStateMachine
 from .transactions import CallAccountingTransactionSender, MitelTransactionSender
@@ -21,6 +22,7 @@ _TRANSACTIONAL_CA_PROTOCOLS = {"INNFORM_XL", "HOBIS", "HOBIS_A", "HOLIDEX"}
 _TRANSACTIONAL_PMS_PROTOCOLS = {"MITEL 1", "MITEL 2", "MITEL_1", "MITEL_2", "DEFAULT", "DEFAULT2"}
 _MITEL_TCP_PROTOCOLS = {"MITEL 1", "MITEL 2", "MITEL_1", "MITEL_2"}
 _MITEL_SERIAL_PROTOCOLS = {"MITEL 1", "MITEL 2", "MITEL_1", "MITEL_2"}
+_PHONESUITE_PERSONALITY = "pbx-phonesuite"
 
 
 @dataclass(slots=True)
@@ -463,6 +465,7 @@ class InterfaceManager:
     async def _reader_loop(self, runtime: InterfaceRuntime, reader: asyncio.StreamReader, peer: str | None) -> None:
         mitel_tcp_session: MitelTcpSessionStateMachine | None = None
         mitel_serial_session: MitelSerialSessionStateMachine | None = None
+        phonesuite_serial_session: PhoneSuiteSerialSessionStateMachine | None = None
         if self._uses_mitel_tcp_session(runtime):
             mitel_tcp_session = MitelTcpSessionStateMachine(
                 auto_ack=bool(runtime.config.options.get("auto_ack", True)),
@@ -470,6 +473,13 @@ class InterfaceManager:
             )
             mitel_tcp_session.connect()
             runtime.transport_session_status = mitel_tcp_session.status()
+        elif self._uses_phonesuite_serial_session(runtime):
+            phonesuite_serial_session = PhoneSuiteSerialSessionStateMachine(
+                auto_ack=bool(runtime.config.options.get("auto_ack", True)),
+                strict_enq=bool(runtime.config.options.get("strict_enq", True)),
+            )
+            phonesuite_serial_session.open()
+            runtime.transport_session_status = phonesuite_serial_session.status()
         elif self._uses_mitel_serial_session(runtime):
             mitel_serial_session = MitelSerialSessionStateMachine(
                 auto_ack=bool(runtime.config.options.get("auto_ack", True)),
@@ -506,6 +516,21 @@ class InterfaceManager:
                     runtime.transport_session_status = mitel_tcp_session.status()
                     continue
 
+                if phonesuite_serial_session is not None:
+                    feed = phonesuite_serial_session.feed(data)
+                    for control in feed.response_controls:
+                        runtime.responses.put_nowait(control)
+                    for action in feed.actions:
+                        await self._send_action(
+                            runtime,
+                            peer,
+                            EngineAction(action.payload, action.note, apply_framing=False),
+                        )
+                    for diagnostic in feed.diagnostics:
+                        self._record_session_diagnostic(runtime, peer, diagnostic)
+                    runtime.transport_session_status = phonesuite_serial_session.status()
+                    continue
+
                 if mitel_serial_session is not None:
                     feed = mitel_serial_session.feed(data)
                     for control in feed.response_controls:
@@ -539,6 +564,10 @@ class InterfaceManager:
                 for diagnostic in mitel_tcp_session.disconnect():
                     self._record_session_diagnostic(runtime, peer, diagnostic)
                 runtime.transport_session_status = mitel_tcp_session.status()
+            if phonesuite_serial_session is not None:
+                for diagnostic in phonesuite_serial_session.close():
+                    self._record_session_diagnostic(runtime, peer, diagnostic)
+                runtime.transport_session_status = phonesuite_serial_session.status()
             if mitel_serial_session is not None:
                 for diagnostic in mitel_serial_session.close():
                     self._record_session_diagnostic(runtime, peer, diagnostic)
@@ -563,18 +592,30 @@ class InterfaceManager:
         )
 
     @staticmethod
-    def _uses_mitel_serial_session(runtime: InterfaceRuntime) -> bool:
+    def _uses_phonesuite_serial_session(runtime: InterfaceRuntime) -> bool:
+        personalities = {runtime.config.personality_id, runtime.config.peer_personality_id}
         return (
             runtime.config.purpose.value == "pms"
             and runtime.config.protocol.upper() in _MITEL_SERIAL_PROTOCOLS
             and runtime.config.transport is TransportMode.SERIAL
+            and _PHONESUITE_PERSONALITY in personalities
+        )
+
+    @staticmethod
+    def _uses_mitel_serial_session(runtime: InterfaceRuntime) -> bool:
+        personalities = {runtime.config.personality_id, runtime.config.peer_personality_id}
+        return (
+            runtime.config.purpose.value == "pms"
+            and runtime.config.protocol.upper() in _MITEL_SERIAL_PROTOCOLS
+            and runtime.config.transport is TransportMode.SERIAL
+            and _PHONESUITE_PERSONALITY not in personalities
         )
 
     @staticmethod
     def _record_session_diagnostic(
         runtime: InterfaceRuntime,
         peer: str | None,
-        diagnostic: MitelSessionDiagnostic,
+        diagnostic: Any,
     ) -> None:
         runtime.session_diagnostics.append({
             "timestamp": datetime.now(timezone.utc).isoformat(),
