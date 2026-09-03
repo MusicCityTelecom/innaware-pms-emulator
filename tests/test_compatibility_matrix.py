@@ -102,6 +102,32 @@ def test_mitel_serial_remains_distinct_partial_and_evidence_qualified() -> None:
     assert "TCP capture facts are not promoted to serial truth" in entry.notes
 
 
+def test_phonesuite_serial_claim_is_limited_to_characterized_pbx_to_pms_direction() -> None:
+    entry = find_compatibility(
+        pbx_family="PhoneSuite",
+        pbx_dialect="MITEL 1-compatible",
+        transport="serial",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.PBX_TO_PMS,
+    )
+    assert entry.status is SupportStatus.PARTIAL
+    assert entry.evidence_class is EvidenceClass.SIMULATOR_CHARACTERIZATION
+    assert "tests/test_phonesuite_serial_pty_integration.py" in entry.deterministic_tests
+    assert "PMS-to-PBX application semantics" in entry.notes
+
+    unqualified_reverse = find_compatibility(
+        pbx_family="PhoneSuite",
+        pbx_dialect="MITEL 1-compatible",
+        transport="serial",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.BIDIRECTIONAL,
+    )
+    assert unqualified_reverse.status is SupportStatus.UNSUPPORTED
+    assert unqualified_reverse.evidence_class is EvidenceClass.NONE
+
+
 def test_catalog_is_structured_for_api_cli_gui_consumers() -> None:
     catalog = compatibility_catalog()
     assert catalog
