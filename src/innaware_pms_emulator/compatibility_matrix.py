@@ -143,8 +143,11 @@ COMPATIBILITY_MATRIX: tuple[CompatibilityEntry, ...] = (
         direction=Direction.PBX_TO_PMS,
         status=SupportStatus.PARTIAL,
         evidence_class=EvidenceClass.OPERATOR_CONFIRMED,
-        deterministic_tests=("tests/test_pbx_brand_catalog.py", "tests/test_protocols.py"),
-        notes="Field-observed Matrix SARVAM UCS initiating FIAS LS over TCP; full Matrix session/fixture coverage is still incomplete.",
+        deterministic_tests=(
+            "tests/test_matrix_sarvam_characterization.py",
+            "tests/test_pbx_brand_catalog.py",
+        ),
+        notes="Operator-confirmed Matrix SARVAM UCS PBX-to-PMS TCP observation is now preserved as a sanitized STX/ETX-framed FIAS LS fixture. A dedicated Matrix MICROS Opera profile and diagnostics deterministically prevent the known CRLF LS-reply framing mismatch. Link progression, retry timing, site port, ENQ/ACK behavior, guest-event semantics, and broader Matrix models/modes remain unqualified.",
     ),
     CompatibilityEntry(
         pbx_family="Hitachi",
