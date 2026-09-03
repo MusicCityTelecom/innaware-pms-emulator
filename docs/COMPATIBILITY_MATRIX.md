@@ -35,11 +35,13 @@ PhoneSuite-specific baud/data/parity/stop defaults are **not** claimed. Runtime 
 
 ### Matrix FIAS
 
-Matrix `MICROS Opera / FIAS` over TCP remains `partial` based on operator-confirmed field behavior plus existing FIAS protocol tests. A dedicated Matrix-specific sanitized fixture/session characterization is still required before stronger claims are appropriate.
+Matrix `MICROS Opera / FIAS` over TCP remains `partial` based on operator-confirmed field behavior. A dedicated sanitized Matrix SARVAM fixture, profile, and deterministic diagnostic tests now preserve the observed PBX→PMS STX/ETX-framed `LS` behavior and the known CRLF-reply framing failure. Matrix-specific post-`LS` progression, retry timing, site port, ENQ/ACK behavior, guest-event semantics, PMS→PBX application direction, and broader Matrix modes/models remain unqualified. Generic FIAS `LD`/`LR`/`LA` knowledge must not be promoted into Matrix-specific truth without Matrix evidence.
 
-### Fifth PBX family
+### Fifth PBX family: Hitachi / Epitome
 
-Hitachi remains only a `planned` catalog placeholder with no wire-level compatibility claim. It must not be promoted until a sanitized evidence source establishes an actual PBX↔PMS dialect, transport, direction, and application behavior.
+Hitachi is now evidence-indexed rather than an evidence-free placeholder. Legacy PhoneSuite/Voiceware profile documentation explicitly identifies `EPIT-HIT` as an Epitome Hitachi-emulation interface used in Navy NGIS/Navy Lodge deployments and `EPIT-HIT2` as a room/name field-layout correction when check-ins fail.
+
+The six-dimensional row is deliberately still `planned`: `Hitachi × EPIT-HIT / Epitome Hitachi emulation × unknown transport × Epitome × EPIT-HIT × PMS_TO_PBX`. Its evidence class is `legacy_source_profile`. This establishes a genuine fifth-family integration lineage, but **does not** qualify transport, framing, control bytes, serial settings, byte-level record layouts, or reverse-direction behavior. A guessed `serial` or `tcp` row therefore still fails closed as `unsupported`.
 
 ## Evidence ranking
 
@@ -58,6 +60,8 @@ Inference alone can never satisfy a `supported` claim. Test harnesses such as lo
 A `supported` row must list deterministic test paths. Unit tests enforce this contract and also verify that unknown combinations fail closed. This makes the compatibility matrix suitable for later CLI/API/GUI presentation without turning auto-detection into auto-configuration.
 
 For `partial` rows, deterministic test paths should still be recorded as coverage is added so the matrix documents what software behavior has actually been exercised without overstating evidence maturity.
+
+For `planned` evidence-indexed rows such as Hitachi/Epitome, deterministic tests may validate the claim boundary itself while wire-level tests remain absent. The absence of a wire fixture must remain visible and must not be converted into an inferred transport or framing choice.
 
 ## Live/Codex acceptance rule
 
