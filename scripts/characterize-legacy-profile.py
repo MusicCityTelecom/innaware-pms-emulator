@@ -14,6 +14,12 @@ if str(SRC) not in sys.path:
 from innaware_pms_emulator.legacy_profile_evidence import characterize_legacy_profile_file
 
 
+def _safe_error(exc: OSError | ValueError) -> str:
+    if isinstance(exc, OSError):
+        return "profile could not be read"
+    return str(exc)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
@@ -47,7 +53,7 @@ def main() -> int:
             results.append(
                 {
                     "source_name": path.name,
-                    "error": str(exc),
+                    "error": _safe_error(exc),
                 }
             )
             continue
