@@ -8,6 +8,8 @@ Each row is keyed by all six required dimensions:
 
 The matrix is deliberately fail-closed. An exact combination that is not explicitly registered is returned as `unsupported`; the emulator must not silently substitute a nearby personality or transport.
 
+When the only difference from an evidence-indexed row is transport, the failed lookup now explains that boundary instead of returning an opaque generic failure. If the known row itself has `transport=unknown` (for example the current Hitachi/Epitome lineage), a requested serial or TCP transport remains `unsupported` and is explicitly identified as evidence-unqualified. If evidence exists only on another concrete transport, the diagnostic names that transport and warns not to transpose framing, timing, handshake, or application behavior. These messages are technician guidance only; they do not create a new compatibility row or promote evidence.
+
 ## Status rules
 
 - `supported`: may be used only when the exact row has deterministic test/fixture coverage and evidence stronger than inference.
@@ -46,7 +48,7 @@ Hitachi is evidence-indexed rather than an evidence-free placeholder. Legacy Pho
 
 `EPIT-HIT` is documented as the default Epitome Hitachi-emulation interface used in Navy NGIS/Navy Lodge deployments. `EPIT-HIT2` is separately documented as the variant to use when normal check-ins fail because the room number and guest name do not appear where expected. Keeping these as separate matrix rows matters because `EPIT-HIT2` is an evidence-backed dialect/profile choice rather than an informal note attached to `EPIT-HIT`.
 
-Both rows deliberately retain `transport=unknown`. The general Voiceware setup material discusses serial PBX-interface configuration, but the available `EPIT-HIT`/`EPIT-HIT2` descriptions do not themselves bind either profile to a transport or serial settings. Neither row therefore qualifies framing, control bytes, baud/data/parity/stop values, byte-level record layout, checksum/BCC, or reverse-direction behavior. Guessed `serial` and `tcp` combinations fail closed as `unsupported`.
+Both rows deliberately retain `transport=unknown`. The general Voiceware setup material discusses serial PBX-interface configuration, but the available `EPIT-HIT`/`EPIT-HIT2` descriptions do not themselves bind either profile to a transport or serial settings. Neither row therefore qualifies framing, control bytes, baud/data/parity/stop values, byte-level record layout, checksum/BCC, or reverse-direction behavior. Guessed `serial` and `tcp` combinations fail closed as `unsupported`. Those transport-only near misses now produce an actionable explanation that the Hitachi lineage is real but the selected transport is not yet evidence-qualified.
 
 ## Evidence ranking
 
