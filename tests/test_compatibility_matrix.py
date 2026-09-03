@@ -128,31 +128,60 @@ def test_phonesuite_serial_claim_is_limited_to_characterized_pbx_to_pms_directio
     assert unqualified_reverse.evidence_class is EvidenceClass.NONE
 
 
-def test_hitachi_fifth_family_is_evidence_indexed_but_not_wire_claimed() -> None:
+@pytest.mark.parametrize(
+    ("dialect", "protocol", "purpose_fragment"),
+    (
+        ("EPIT-HIT / Epitome Hitachi emulation", "EPIT-HIT", "Hitachi-emulation interface"),
+        (
+            "EPIT-HIT2 / Epitome Hitachi room-name layout variant",
+            "EPIT-HIT2",
+            "room and guest-name fields",
+        ),
+    ),
+)
+def test_hitachi_fifth_family_variants_are_evidence_indexed_but_not_wire_claimed(
+    dialect: str,
+    protocol: str,
+    purpose_fragment: str,
+) -> None:
     entry = find_compatibility(
         pbx_family="Hitachi",
-        pbx_dialect="EPIT-HIT / Epitome Hitachi emulation",
+        pbx_dialect=dialect,
         transport="unknown",
         pms_family="Epitome",
-        pms_protocol="EPIT-HIT",
+        pms_protocol=protocol,
         direction=Direction.PMS_TO_PBX,
     )
     assert entry.status is SupportStatus.PLANNED
     assert entry.evidence_class is EvidenceClass.LEGACY_SOURCE_PROFILE
     assert entry.deterministic_tests == ()
-    assert "EPIT-HIT2" in entry.notes
+    assert purpose_fragment in entry.notes
     assert "no wire-level compatibility is claimed" in entry.notes
 
-    guessed_serial = find_compatibility(
+
+@pytest.mark.parametrize("transport", ("serial", "tcp"))
+@pytest.mark.parametrize(
+    ("dialect", "protocol"),
+    (
+        ("EPIT-HIT / Epitome Hitachi emulation", "EPIT-HIT"),
+        ("EPIT-HIT2 / Epitome Hitachi room-name layout variant", "EPIT-HIT2"),
+    ),
+)
+def test_hitachi_transport_guesses_fail_closed(
+    dialect: str,
+    protocol: str,
+    transport: str,
+) -> None:
+    guessed = find_compatibility(
         pbx_family="Hitachi",
-        pbx_dialect="EPIT-HIT / Epitome Hitachi emulation",
-        transport="serial",
+        pbx_dialect=dialect,
+        transport=transport,
         pms_family="Epitome",
-        pms_protocol="EPIT-HIT",
+        pms_protocol=protocol,
         direction=Direction.PMS_TO_PBX,
     )
-    assert guessed_serial.status is SupportStatus.UNSUPPORTED
-    assert guessed_serial.evidence_class is EvidenceClass.NONE
+    assert guessed.status is SupportStatus.UNSUPPORTED
+    assert guessed.evidence_class is EvidenceClass.NONE
 
 
 def test_catalog_is_structured_for_api_cli_gui_consumers() -> None:
