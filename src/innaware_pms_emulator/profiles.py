@@ -37,6 +37,31 @@ BUILTIN_PROFILES: dict[str, InterfaceProfile] = {
         },
         notes=["Use STX/ETX only when the target FIAS profile specifically requires it."],
     ),
+    "matrix-micros-opera-fias-tcp-server": InterfaceProfile(
+        id="matrix-micros-opera-fias-tcp-server",
+        name="Matrix MICROS Opera FIAS - TCP Server",
+        purpose="pms",
+        protocol="FIAS",
+        maturity="field-observed",
+        description=(
+            "Matrix SARVAM UCS MICROS Opera interoperability profile using FIAS application records "
+            "with the field-observed STX/ETX wire framing. Matrix was observed initiating the TCP "
+            "connection toward the PMS endpoint."
+        ),
+        defaults={
+            "transport": "tcp_server",
+            "bind_host": "0.0.0.0",
+            "port": 5001,
+            "peer_personality_id": "pbx-matrix",
+            "emulation_role": "pms",
+            "options": {"framing": "stx_etx", "role": "pms"},
+        },
+        notes=[
+            "Port 5001 is InnAware's lab default, not a Matrix vendor default; override it to match the site configuration.",
+            "No ENQ/ACK behavior is enabled because it is not part of the qualified Matrix MICROS Opera observation.",
+            "TCP connected is not protocol active; inbound LS starts FIAS link negotiation and guest traffic should wait for link progression.",
+        ],
+    ),
     "hilton-pep-fias-tcp-server": InterfaceProfile(
         id="hilton-pep-fias-tcp-server",
         name="Hilton / PEP FIAS - TCP Server",
