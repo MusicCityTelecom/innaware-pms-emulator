@@ -14,6 +14,7 @@ from serial.tools import list_ports
 
 from . import __version__
 from .capture_diagnostics import diagnose_capture_interface
+from .capture_diagnostics_console import html as capture_diagnostics_html
 from .models import CallRecord, GuestEvent, InterfaceConfig
 from .operator_console import html as operator_html
 from .profiles import build_interface_from_profile, profile_catalog
@@ -456,6 +457,11 @@ async def send_call_record_transaction(name: str, call: CallRecord):
     return {"protocol": runtime.config.protocol, "hex": payload.hex(" "), "transaction": result}
 
 
+@app.get("/capture-diagnostics", response_class=HTMLResponse)
+def capture_diagnostics_page():
+    return capture_diagnostics_html()
+
+
 @app.get("/updates", response_class=HTMLResponse)
 def updates_page():
     return update_html()
@@ -466,7 +472,13 @@ def index():
     page = operator_html()
     marker = '<span id="health"'
     if marker in page:
-        page = page.replace(marker, '<button onclick="location.href=\'/updates\'">Updates</button> <span id="health"', 1)
+        page = page.replace(
+            marker,
+            '<button onclick="location.href=\'/updates\'">Updates</button> '
+            '<button onclick="location.href=\'/capture-diagnostics\'">Analyze Capture</button> '
+            '<span id="health"',
+            1,
+        )
     return page
 
 
