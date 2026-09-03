@@ -158,7 +158,18 @@ COMPATIBILITY_MATRIX: tuple[CompatibilityEntry, ...] = (
         direction=Direction.PMS_TO_PBX,
         status=SupportStatus.PLANNED,
         evidence_class=EvidenceClass.LEGACY_SOURCE_PROFILE,
-        notes="Legacy PhoneSuite/Voiceware profile documentation explicitly identifies EPIT-HIT as an Epitome Hitachi-emulation interface and EPIT-HIT2 as a room/name field-layout correction for failed check-ins. This establishes a real fifth-family integration lineage but does not qualify transport, framing, control bytes, serial parameters, exact record layouts, or reverse-direction behavior; no wire-level compatibility is claimed yet.",
+        notes="Legacy PhoneSuite/Voiceware profile documentation explicitly identifies EPIT-HIT as an Epitome Hitachi-emulation interface. This establishes a real fifth-family integration lineage but does not qualify transport, framing, control bytes, serial parameters, exact record layouts, or reverse-direction behavior; no wire-level compatibility is claimed yet.",
+    ),
+    CompatibilityEntry(
+        pbx_family="Hitachi",
+        pbx_dialect="EPIT-HIT2 / Epitome Hitachi room-name layout variant",
+        transport="unknown",
+        pms_family="Epitome",
+        pms_protocol="EPIT-HIT2",
+        direction=Direction.PMS_TO_PBX,
+        status=SupportStatus.PLANNED,
+        evidence_class=EvidenceClass.LEGACY_SOURCE_PROFILE,
+        notes="Legacy PhoneSuite/Voiceware documentation explicitly identifies EPIT-HIT2 as the Epitome Hitachi variant used when normal check-ins fail because room and guest-name fields do not appear where expected. The documentation establishes the variant's purpose only; transport, framing, control bytes, serial parameters, exact byte offsets/layout, and reverse-direction behavior remain unqualified and no wire-level compatibility is claimed yet.",
     ),
 )
 
