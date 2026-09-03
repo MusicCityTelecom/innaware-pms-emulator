@@ -45,6 +45,29 @@ _RECORD_KEYS = {
     "areyouthere",
 }
 _SAFE_SCALAR_KEYS = ("description", "protocol", "family", "checksum", "nameorder")
+_SAFE_MASK_KEYS = {
+    "swapnames",
+    "nameindex0",
+    "chkdelim",
+    "namdelim",
+}
+_SAFE_MASK_SUFFIXES = {
+    "",
+    "delim",
+    "room",
+    "name",
+    "status",
+    "index",
+    "index0",
+    "prefix",
+    "suffix",
+    "offset",
+    "length",
+    "mask",
+    "literal",
+    "first",
+    "last",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +84,7 @@ class LegacyProfileEvidence:
     evidence_class: str
     sections: tuple[str, ...]
     profile_section: str | None
+    mask_section: str | None
     profile_identity: dict[str, str]
     transport: str
     transport_source: str
@@ -68,13 +92,17 @@ class LegacyProfileEvidence:
     serial_parameters: dict[str, str | int | float]
     record_keys: tuple[str, ...]
     record_layouts: dict[str, str]
+    record_mask_keys: tuple[str, ...]
+    record_mask_layouts: dict[str, str]
     unknown_key_count: int
+    unknown_mask_key_count: int
     warnings: tuple[str, ...]
 
     def as_dict(self) -> dict[str, Any]:
         value = asdict(self)
         value["sections"] = list(self.sections)
         value["record_keys"] = list(self.record_keys)
+        value["record_mask_keys"] = list(self.record_mask_keys)
         value["warnings"] = list(self.warnings)
         return value
 
@@ -114,6 +142,18 @@ def _normalize_transport(value: str) -> str | None:
     return aliases.get(token)
 
 
+def _is_safe_record_mask_key(key: str) -> bool:
+    normalized = key.strip().lower()
+    if normalized in _SAFE_MASK_KEYS:
+        return True
+    for prefix in _RECORD_KEYS:
+        if normalized == prefix:
+            return True
+        if normalized.startswith(prefix) and normalized[len(prefix) :] in _SAFE_MASK_SUFFIXES:
+            return True
+    return False
+
+
 def characterize_legacy_profile_bytes(
     data: bytes,
     *,
@@ -124,7 +164,8 @@ def characterize_legacy_profile_bytes(
 
     Exact record-mask values are omitted by default. Callers must explicitly
     opt in to them for local characterization; even then only known protocol
-    command keys are emitted, never arbitrary profile values.
+    command keys and bounded PBX-mask layout keys are emitted, never arbitrary
+    profile values.
     """
 
     if len(data) > MAX_PROFILE_BYTES:
@@ -158,8 +199,13 @@ def characterize_legacy_profile_bytes(
     )
     if profile_section is None:
         raise ValueError("legacy profile contains no INI section")
+    mask_section = next(
+        (name for name in sections if name.strip().lower() == "pbx-masks"),
+        None,
+    )
 
     items = dict(parser.items(profile_section, raw=True))
+    mask_items = dict(parser.items(mask_section, raw=True)) if mask_section is not None else {}
     identity = {
         key: items[key].strip()
         for key in _SAFE_SCALAR_KEYS
@@ -203,6 +249,13 @@ def characterize_legacy_profile_bytes(
         if include_record_layouts
         else {}
     )
+    safe_mask_keys = tuple(sorted(key for key in mask_items if _is_safe_record_mask_key(key)))
+    record_mask_keys = tuple(key.upper() for key in safe_mask_keys)
+    record_mask_layouts = (
+        {key.upper(): mask_items[key] for key in safe_mask_keys}
+        if include_record_layouts
+        else {}
+    )
 
     recognized_keys = set(_SAFE_SCALAR_KEYS)
     recognized_keys.update(_CONTROL_BYTE_KEYS)
@@ -210,6 +263,7 @@ def characterize_legacy_profile_bytes(
     recognized_keys.update(_RECORD_KEYS)
     recognized_keys.add("transport")
     unknown_key_count = sum(1 for key in items if key not in recognized_keys)
+    unknown_mask_key_count = sum(1 for key in mask_items if not _is_safe_record_mask_key(key))
 
     if transport == "unknown":
         warnings.append(
@@ -219,6 +273,10 @@ def characterize_legacy_profile_bytes(
         warnings.append(
             "no profile-bound serial parameters were found; do not inherit generic serial defaults"
         )
+    if mask_section is not None and unknown_mask_key_count:
+        warnings.append(
+            "PBX mask section contains unrecognized keys whose values were intentionally omitted"
+        )
 
     return LegacyProfileEvidence(
         source_name=Path(source_name).name,
@@ -226,6 +284,7 @@ def characterize_legacy_profile_bytes(
         evidence_class="legacy_source_profile",
         sections=sections,
         profile_section=profile_section,
+        mask_section=mask_section,
         profile_identity=identity,
         transport=transport,
         transport_source=transport_source,
@@ -233,7 +292,10 @@ def characterize_legacy_profile_bytes(
         serial_parameters=serial_parameters,
         record_keys=record_keys,
         record_layouts=record_layouts,
+        record_mask_keys=record_mask_keys,
+        record_mask_layouts=record_mask_layouts,
         unknown_key_count=unknown_key_count,
+        unknown_mask_key_count=unknown_mask_key_count,
         warnings=tuple(warnings),
     )
 
