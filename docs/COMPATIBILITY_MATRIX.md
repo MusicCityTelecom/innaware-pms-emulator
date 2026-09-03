@@ -31,9 +31,15 @@ Mitel `legacy MTL-compatible` serial remains a distinct `partial` row using lega
 
 ### PhoneSuite serial
 
-PhoneSuite `MITEL 1-compatible` serial remains `partial` using simulator characterization. Its clean-room fixture, dedicated session adapter, live serial selector, and Linux POSIX PTY tests cover characterized ENQ/ACK plus STX/ETX `CHK0`, `CHK1`, and `NAM2` behavior, fragmented/coalesced reads, close/reopen reset, and peer ACK/NAK control routing.
+PhoneSuite serial now has **separate directional rows** instead of an aggregate bidirectional claim, because the available evidence has different provenance in each direction.
 
-PhoneSuite-specific baud/data/parity/stop defaults are **not** claimed. Runtime serial parameters remain operator-configured until stronger PhoneSuite-specific evidence qualifies defaults. Linux PTY validation is test infrastructure, not a new protocol-evidence class. Series2/Voiceware TDMoE, PRI, Q.921/Q.931, D-channel, or `0x0E` station-programming observations must not be treated as PhoneSuite PBX↔PMS serial/application evidence.
+`PhoneSuite × MITEL 1-compatible × serial × legacy-hotel-pms × mitel-hospitality × PBX_TO_PMS` remains `partial / simulator_characterization`. Its clean-room fixture, dedicated session adapter, live serial selector, and Linux POSIX PTY tests cover characterized ENQ/ACK plus STX/ETX `CHK0`, `CHK1`, and `NAM2` behavior, fragmented/coalesced reads, close/reopen reset, and peer ACK/NAK control routing.
+
+`PhoneSuite × MITEL 1-compatible × serial × legacy-hotel-pms × mitel-hospitality × PMS_TO_PBX` is now separately registered as `partial / legacy_source_profile`. Historical PhoneSuite/Voiceware PMS-interface documentation explicitly states that either PhoneSuite or the PMS can be the sender for the ENQ/ACK/STX-message-ETX exchange and explicitly identifies PMS-to-PhoneSuite `CHK1` and `CHK0` check-in/out commands. The same documentation qualifies PhoneSuite's receive-side timing: after PhoneSuite ACKs a PMS ENQ, STX must arrive within **0.100 second**; between-character delay greater than **0.100 second** times out the transaction; ETX must terminate the message inside that receive window; and late non-ENQ data after the timed-out transaction is answered with NAK. `phonesuite_pms_policy.py` preserves these facts as deterministic technician diagnostics rather than importing the Mitel-compatible three-second timer or Mitel frame-only retry count.
+
+PhoneSuite-specific baud/data/parity/stop/flow defaults are still **not** claimed. Voiceware setup documentation allows serial and TCP/IP methods and gives general serial configuration guidance, while the existing serial characterization/runtime proves the emulator's serial path. Those facts do not establish a universal PhoneSuite serial parameter set. Retry policy, optional-checksum use, and additional PMS-to-PhoneSuite command families also remain unqualified. Linux PTY validation is test infrastructure, not a new protocol-evidence class. Series2/Voiceware TDMoE, PRI, Q.921/Q.931, D-channel, or `0x0E` station-programming observations must not be treated as PhoneSuite PBX↔PMS serial/application evidence.
+
+An aggregate `BIDIRECTIONAL` PhoneSuite row intentionally remains absent. Consumers must query the exact direction so the simulator-characterized PBX→PMS evidence is not silently promoted to the stronger legacy-source class used for the newly qualified PMS→PBX subset.
 
 ### Matrix FIAS
 
