@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from serial.tools import list_ports
 
 from . import __version__
+from .capture_diagnostics import diagnose_capture_interface
 from .models import CallRecord, GuestEvent, InterfaceConfig
 from .operator_console import html as operator_html
 from .profiles import build_interface_from_profile, profile_catalog
@@ -338,6 +339,13 @@ def interface_transactions(name: str, limit: int = 100):
 def interface_diagnostics(name: str, limit: int = 100):
     _interface_or_404(name)
     return {"diagnostics": manager.diagnostics(name, limit)}
+
+
+@app.get("/api/v1/interfaces/{name}/capture-diagnostics")
+def interface_capture_diagnostics(name: str, limit: int = 200):
+    runtime = _interface_or_404(name)
+    report = diagnose_capture_interface(runtime.config, manager.captures(name, limit))
+    return report.as_dict()
 
 
 @app.get("/api/v1/support-bundle")
