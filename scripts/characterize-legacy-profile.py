@@ -26,8 +26,9 @@ def main() -> int:
         "--include-record-layouts",
         action="store_true",
         help=(
-            "include exact values for recognized protocol record keys such as CHK/NAM; "
-            "leave off for the safest metadata-only characterization"
+            "include exact values for recognized protocol record keys and bounded "
+            "[pbx-masks] room/name layout keys; leave off for the safest metadata-only "
+            "characterization"
         ),
     )
     args = parser.parse_args()
