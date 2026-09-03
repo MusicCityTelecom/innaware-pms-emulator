@@ -124,9 +124,10 @@ COMPATIBILITY_MATRIX: tuple[CompatibilityEntry, ...] = (
         pms_family="legacy-hotel-pms",
         pms_protocol="mitel-hospitality",
         direction=Direction.BIDIRECTIONAL,
-        status=SupportStatus.PLANNED,
+        status=SupportStatus.PARTIAL,
         evidence_class=EvidenceClass.SIMULATOR_CHARACTERIZATION,
-        notes="PhoneSuite simulator/reference evidence exists, but deterministic clean-room runtime fixtures are not complete.",
+        deterministic_tests=("tests/test_phonesuite_serial_characterization.py",),
+        notes="Clean-room simulator-backed fixture now covers ENQ/ACK and STX/ETX-wrapped CHK/NAM examples without asserting PhoneSuite-specific serial settings or importing Series2 TDMoE/PRI station-programming behavior. Live PhoneSuite runtime/session behavior remains incomplete.",
     ),
     CompatibilityEntry(
         pbx_family="Matrix",
