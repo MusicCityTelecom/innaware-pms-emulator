@@ -7,7 +7,35 @@ from typing import Any
 
 PHONESUITE_PMS_MAX_GAP_SECONDS = 0.1
 _OPCODE_RE = re.compile(r"^([A-Z]+)([0-9]*)")
-_VENDOR_PMS_TO_PBX_OPCODES = {"CHK0", "CHK1"}
+_VENDOR_PMS_TO_PBX_EXACT_OPCODES = {
+    "CHK0",
+    "CHK1",
+    "DND0",
+    "DND1",
+    "MW0",
+    "MW1",
+    "NAM1",
+    "NAM2",
+    "NAM3",
+    "NAM4",
+    "AREYUTHERE",
+    "GRS",
+    "END",
+}
+_VENDOR_PMS_TO_PBX_FAMILIES = {"LMT", "GRP", "LNG", "RST"}
+_VENDOR_PMS_TO_PBX_FORMATS = {
+    "CHK": "CHK1 EEEE [Name] or CHK0 EEEE",
+    "LMT": "LMT EEE dd.cc or LMT EEEE $dd.cc",
+    "DND": "DND1 EEEE or DND0 EEEE",
+    "GRP": "GRP EEE[E] AAAAAAAAAA",
+    "LNG": "LNGxxEEE[E] with lowercase two-letter ISO 639-1 code xx",
+    "MW": "MW 1 EEEE or MW 0 EEEE; exactly one space between MW and status",
+    "RST": "RSTn EEEE",
+    "AREYUTHERE": "AREYUTHERE",
+    "GRS": "GRS",
+    "END": "END",
+    "NAM": "NAMn Name EEEE where n is 1-4",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,6 +43,7 @@ class PhoneSuitePMSRecordAssessment:
     opcode: str | None
     family: str | None
     qualified: bool
+    expected_format: str | None = None
     direction: str = "pms_to_pbx"
     evidence_class: str = "legacy_source_profile"
 
@@ -23,6 +52,7 @@ class PhoneSuitePMSRecordAssessment:
             "opcode": self.opcode,
             "family": self.family,
             "qualified": self.qualified,
+            "expected_format": self.expected_format,
             "direction": self.direction,
             "evidence_class": self.evidence_class,
         }
@@ -50,26 +80,65 @@ class PhoneSuitePMSTimingDiagnostic:
         }
 
 
-def assess_phonesuite_pms_record(payload: bytes) -> PhoneSuitePMSRecordAssessment:
-    """Classify only PMS->PhoneSuite records explicitly qualified by legacy docs.
+def _extract_phonesuite_pms_opcode(text: str) -> tuple[str | None, str | None]:
+    """Normalize documented PhoneSuite PMS command spellings without guessing transport."""
 
-    The PhoneSuite/Voiceware PMS interface documentation explicitly describes
-    CHK1 and CHK0 as PMS-to-PhoneSuite Check In/Out commands. Other message
-    families may exist in the same documentation, but they are intentionally
-    not promoted through this narrow evidence boundary until separately
-    modeled and tested.
+    if not text:
+        return None, None
+
+    upper = text.upper()
+
+    # The legacy source requires a literal space between MW and the 0/1 status.
+    mw_match = re.match(r"^MW\s+([01])(?:\s|$)", upper)
+    if mw_match:
+        return f"MW{mw_match.group(1)}", "MW"
+
+    # LNG carries the ISO 639-1 code immediately after the family token, so a
+    # generic alpha-prefix parser would otherwise misclassify LNGen101 as a
+    # distinct family. Qualification here is family-level; the format hint
+    # retains the documented lowercase-code requirement for technicians.
+    if upper.startswith("LNG") and len(text) >= 5 and text[3:5].isalpha():
+        return f"LNG{text[3:5]}", "LNG"
+
+    match = _OPCODE_RE.match(upper)
+    if not match:
+        return None, None
+    family = match.group(1)
+    opcode = family + match.group(2)
+    return opcode, family
+
+
+def assess_phonesuite_pms_record(payload: bytes) -> PhoneSuitePMSRecordAssessment:
+    """Classify PMS->PhoneSuite records explicitly qualified by legacy docs.
+
+    The historical PhoneSuite/Voiceware PMS-interface documentation explicitly
+    documents PMS-originated check-in/out, credit-limit, DND, group-code,
+    language, message-waiting, phone-restriction, database-dump control, and
+    guest-name command families. This classifier exposes only those documented
+    families. Ambiguous/reverse-direction families such as MOV, MSG, STS, and
+    RQINZ are deliberately not promoted here.
+
+    Qualification means the command family/direction is evidence-backed; it is
+    not a blanket assertion that every payload instance is syntactically valid.
+    expected_format provides the source-backed technician hint without importing
+    serial defaults, checksum behavior, retry policy, or Mitel TCP timing.
     """
 
     text = payload.decode("latin-1", errors="replace").strip("\x00\r\n ")
-    match = _OPCODE_RE.match(text.upper()) if text else None
-    if not match:
+    opcode, family = _extract_phonesuite_pms_opcode(text)
+    if not opcode or not family:
         return PhoneSuitePMSRecordAssessment(None, None, False)
-    family = match.group(1)
-    opcode = family + match.group(2)
+
+    qualified = (
+        opcode in _VENDOR_PMS_TO_PBX_EXACT_OPCODES
+        or family in _VENDOR_PMS_TO_PBX_FAMILIES
+    )
+    expected_format = _VENDOR_PMS_TO_PBX_FORMATS.get(family) if qualified else None
     return PhoneSuitePMSRecordAssessment(
         opcode=opcode,
         family=family,
-        qualified=opcode in _VENDOR_PMS_TO_PBX_OPCODES,
+        qualified=qualified,
+        expected_format=expected_format,
     )
 
 
