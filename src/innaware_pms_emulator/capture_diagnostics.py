@@ -4,6 +4,7 @@ from typing import Any, Iterable
 
 from .diagnostics import DiagnosticFinding, DiagnosticReport, WireObservation, diagnose_interface, observe_capture
 from .phonesuite_pms_policy import diagnose_phonesuite_pms_record_format
+from .phonesuite_pms_source_extensions import diagnose_phonesuite_pms_source_extension_format
 
 
 _PHONESUITE_PERSONALITY = "pbx-phonesuite"
@@ -59,7 +60,11 @@ def _phonesuite_pms_format_findings(
         if observation.record_family != "legacy_hotel" or not observation.payload:
             continue
 
-        for diagnostic in diagnose_phonesuite_pms_record_format(observation.payload):
+        diagnostics = [
+            *diagnose_phonesuite_pms_record_format(observation.payload),
+            *diagnose_phonesuite_pms_source_extension_format(observation.payload),
+        ]
+        for diagnostic in diagnostics:
             findings.append(
                 DiagnosticFinding(
                     id=diagnostic.code,
