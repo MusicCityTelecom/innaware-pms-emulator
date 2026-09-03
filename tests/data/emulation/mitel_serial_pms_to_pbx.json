@@ -1,0 +1,35 @@
+{
+  "fixtures": [
+    {
+      "id": "mitel-serial-pms-to-pbx-simulator-chk-sequence",
+      "personality": "pbx-mitel-sx200",
+      "protocol": "MITEL 1",
+      "framing": "stx_etx",
+      "status": "partially_characterized",
+      "sanitized": true,
+      "evidence": "Project-source clean-room PBX simulator characterization observed PMS-originated ENQ -> ACK followed by STX CHK1/CHK0 ETX -> ACK at an explicitly configured 9600 8N1 XON/XOFF lab serial link. Control bytes and spacing mirror the observed transcript; room 901 is synthetic. This fixture characterizes the serial PMS-to-PBX transaction shape only and does not make 9600 or the selected Mitel personality a universal hardware default.",
+      "environment": {
+        "transport": "serial",
+        "serial": {
+          "baud_rate": 9600,
+          "data_bits": 8,
+          "parity": "N",
+          "stop_bits": 1,
+          "flow_control": "xonxoff"
+        },
+        "evidence_class": "simulator_characterization",
+        "scope": "observed lab configuration only; not a universal Mitel serial preset"
+      },
+      "steps": [
+        {"direction": "rx", "hex": "05", "expect_control": "ENQ", "expect_state": "peer_granted"},
+        {"direction": "tx", "hex": "06", "expect_control": "ACK"},
+        {"direction": "rx", "hex": "02 43 48 4b 31 20 20 20 39 30 31 03", "expect_framing": "stx_etx", "expect_record": "CHK1", "expect_state": "idle"},
+        {"direction": "tx", "hex": "06", "expect_control": "ACK"},
+        {"direction": "rx", "hex": "05", "expect_control": "ENQ", "expect_state": "peer_granted"},
+        {"direction": "tx", "hex": "06", "expect_control": "ACK"},
+        {"direction": "rx", "hex": "02 43 48 4b 30 20 20 20 39 30 31 03", "expect_framing": "stx_etx", "expect_record": "CHK0", "expect_state": "idle"},
+        {"direction": "tx", "hex": "06", "expect_control": "ACK"}
+      ]
+    }
+  ]
+}
