@@ -110,8 +110,12 @@ COMPATIBILITY_MATRIX: tuple[CompatibilityEntry, ...] = (
         direction=Direction.PBX_TO_PMS,
         status=SupportStatus.PARTIAL,
         evidence_class=EvidenceClass.LEGACY_SOURCE_PROFILE,
-        deterministic_tests=("tests/test_mitel_serial_session.py",),
-        notes="Serial session state is unit-tested but not yet wired through the live pyserial runtime or PTY-tested; TCP capture facts are not promoted to serial truth.",
+        deterministic_tests=(
+            "tests/test_mitel_serial_session.py",
+            "tests/test_mitel_serial_runtime_integration.py",
+            "tests/test_mitel_serial_pty_integration.py",
+        ),
+        notes="Serial session, live runtime, Linux PTY framing/reopen, and outbound ENQ/ACK/NAK transaction paths are deterministic-tested; real PBX hardware and broader model/timing evidence remain incomplete. TCP capture facts are not promoted to serial truth.",
     ),
     CompatibilityEntry(
         pbx_family="PhoneSuite",
