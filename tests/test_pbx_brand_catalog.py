@@ -57,11 +57,15 @@ def test_matrix_exposes_mitel_and_matrix_specific_modes():
     assert "MATRIX_EXTENDED_STARLIGHT" in matrix.protocols
 
 
-def test_hitachi_is_not_silently_mapped_to_mitel():
+def test_hitachi_is_evidence_indexed_without_mitel_or_wire_assumptions():
     hitachi = PERSONALITIES["pbx-hitachi"]
-    assert hitachi.protocols == ("HITACHI",)
+    assert hitachi.maturity == "evidence-indexed"
+    assert hitachi.protocols == ("EPIT-HIT", "EPIT-HIT2")
     assert "MITEL 1" not in hitachi.protocols
     assert "MITEL 2" not in hitachi.protocols
+    assert hitachi.recommended_profile is None
+    assert "byte-level wire behavior is not yet qualified" in hitachi.description
+    assert any("do not infer framing" in note for note in hitachi.notes)
 
 
 def test_development_aliases_resolve_to_normalized_brands():
