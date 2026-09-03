@@ -102,8 +102,8 @@ def test_mitel_serial_remains_distinct_partial_and_evidence_qualified() -> None:
     assert "TCP capture facts are not promoted to serial truth" in entry.notes
 
 
-def test_phonesuite_serial_claim_is_limited_to_characterized_pbx_to_pms_direction() -> None:
-    entry = find_compatibility(
+def test_phonesuite_serial_keeps_direction_specific_evidence_rows() -> None:
+    pbx_to_pms = find_compatibility(
         pbx_family="PhoneSuite",
         pbx_dialect="MITEL 1-compatible",
         transport="serial",
@@ -111,12 +111,27 @@ def test_phonesuite_serial_claim_is_limited_to_characterized_pbx_to_pms_directio
         pms_protocol="mitel-hospitality",
         direction=Direction.PBX_TO_PMS,
     )
-    assert entry.status is SupportStatus.PARTIAL
-    assert entry.evidence_class is EvidenceClass.SIMULATOR_CHARACTERIZATION
-    assert "tests/test_phonesuite_serial_pty_integration.py" in entry.deterministic_tests
-    assert "PMS-to-PBX application semantics" in entry.notes
+    assert pbx_to_pms.status is SupportStatus.PARTIAL
+    assert pbx_to_pms.evidence_class is EvidenceClass.SIMULATOR_CHARACTERIZATION
+    assert "tests/test_phonesuite_serial_pty_integration.py" in pbx_to_pms.deterministic_tests
+    assert "registered separately" in pbx_to_pms.notes
 
-    unqualified_reverse = find_compatibility(
+    pms_to_pbx = find_compatibility(
+        pbx_family="PhoneSuite",
+        pbx_dialect="MITEL 1-compatible",
+        transport="serial",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.PMS_TO_PBX,
+    )
+    assert pms_to_pbx.status is SupportStatus.PARTIAL
+    assert pms_to_pbx.evidence_class is EvidenceClass.LEGACY_SOURCE_PROFILE
+    assert "tests/test_phonesuite_pms_policy.py" in pms_to_pbx.deterministic_tests
+    assert "0.100-second" in pms_to_pbx.notes
+    assert "retry policy" in pms_to_pbx.notes
+    assert "Mitel TCP three-second/retry semantics" in pms_to_pbx.notes
+
+    aggregate = find_compatibility(
         pbx_family="PhoneSuite",
         pbx_dialect="MITEL 1-compatible",
         transport="serial",
@@ -124,8 +139,8 @@ def test_phonesuite_serial_claim_is_limited_to_characterized_pbx_to_pms_directio
         pms_protocol="mitel-hospitality",
         direction=Direction.BIDIRECTIONAL,
     )
-    assert unqualified_reverse.status is SupportStatus.UNSUPPORTED
-    assert unqualified_reverse.evidence_class is EvidenceClass.NONE
+    assert aggregate.status is SupportStatus.UNSUPPORTED
+    assert aggregate.evidence_class is EvidenceClass.NONE
 
 
 @pytest.mark.parametrize(
