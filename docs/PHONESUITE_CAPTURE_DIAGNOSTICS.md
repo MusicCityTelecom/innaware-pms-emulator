@@ -38,6 +38,20 @@ NAM0 TEST,GUEST 101
 
 can produce `phonesuite_pms_nam_index_invalid` only in the qualified PMS-to-PBX direction. An identical record observed in the reverse direction is not enough evidence to assign PhoneSuite PMS-to-PBX semantics.
 
+## Analyze Capture technician view
+
+The operator console links to a dedicated read-only page at:
+
+```text
+GET /capture-diagnostics
+```
+
+The **Analyze Capture** view lets a technician choose an existing interface and a bounded capture window, then renders the existing capture-diagnostic report as endpoint context, observations, evidence/confidence, findings, and corrective actions. The browser only performs GET requests against the interface list and `capture-diagnostics` report endpoint.
+
+The page intentionally cannot start or stop an interface, send traffic, instantiate or switch a profile, change a serial/TCP transport, or write configuration. It also does not consume the live `/diagnostics` session stream. That separation is deliberate: capture analysis explains bounded observed wire evidence, while live diagnostics report transport/session-state-machine events.
+
+An empty finding list means only that no configured diagnostic rule fired in the selected window. It must not be presented as proof that a PBX/PMS combination is supported, and it does not alter any compatibility-matrix status.
+
 ## Safety
 
 Use synthetic or redacted room/name values in deterministic fixtures and shared support material. A capture report may reflect live traffic supplied by the operator, so normal support-bundle and evidence-handling practices still apply. Never turn a diagnostic match into an automatic personality switch.
