@@ -127,11 +127,12 @@ COMPATIBILITY_MATRIX: tuple[CompatibilityEntry, ...] = (
         status=SupportStatus.PARTIAL,
         evidence_class=EvidenceClass.SIMULATOR_CHARACTERIZATION,
         deterministic_tests=(
+            "tests/test_mitel_serial_replay_fixture.py",
             "tests/test_mitel_serial_session.py",
             "tests/test_mitel_serial_runtime_integration.py",
             "tests/test_mitel_serial_pty_integration.py",
         ),
-        notes="A clean-room serial PBX simulator explicitly observed PMS-originated ENQ -> ACK followed by STX CHK1/CHK0 ETX -> ACK, while the independent serial session/runtime/PTY tests preserve the same receive-side transaction boundary. The observed lab serial parameters are characterization data, not universal Mitel defaults; profile/site serial settings remain separately configurable. Public Mitel application-protocol timing/retry material does not itself qualify a transport, and no TCP capture fact is promoted into this serial row.",
+        notes="A clean-room serial PBX simulator explicitly observed PMS-originated ENQ -> ACK followed by STX CHK1/CHK0 ETX -> ACK. A sanitized deterministic replay fixture now preserves that exact receive-side transaction lineage, while the independent serial session/runtime/PTY tests preserve the same boundary. The observed lab serial parameters are characterization data, not universal Mitel defaults; profile/site serial settings remain separately configurable. Public Mitel application-protocol timing/retry material does not itself qualify a transport, and no TCP capture fact is promoted into this serial row.",
     ),
     CompatibilityEntry(
         pbx_family="PhoneSuite",
