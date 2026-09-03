@@ -126,8 +126,12 @@ COMPATIBILITY_MATRIX: tuple[CompatibilityEntry, ...] = (
         direction=Direction.BIDIRECTIONAL,
         status=SupportStatus.PARTIAL,
         evidence_class=EvidenceClass.SIMULATOR_CHARACTERIZATION,
-        deterministic_tests=("tests/test_phonesuite_serial_characterization.py",),
-        notes="Clean-room simulator-backed fixture now covers ENQ/ACK and STX/ETX-wrapped CHK/NAM examples without asserting PhoneSuite-specific serial settings or importing Series2 TDMoE/PRI station-programming behavior. Live PhoneSuite runtime/session behavior remains incomplete.",
+        deterministic_tests=(
+            "tests/test_phonesuite_serial_characterization.py",
+            "tests/test_phonesuite_serial_session.py",
+            "tests/test_phonesuite_serial_runtime_integration.py",
+        ),
+        notes="Clean-room simulator-backed ENQ/ACK and STX/ETX CHK/NAM characterization now has a dedicated PhoneSuite session adapter and live serial runtime selection. Serial settings remain operator-configured because PhoneSuite-specific defaults and real-hardware timing/retry behavior are not yet evidence-qualified; Series2 TDMoE/PRI station programming remains out of scope.",
     ),
     CompatibilityEntry(
         pbx_family="Matrix",
