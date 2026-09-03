@@ -185,6 +185,62 @@ def compatibility_catalog() -> list[dict[str, Any]]:
     return [entry.as_dict() for entry in COMPATIBILITY_MATRIX]
 
 
+def _transport_neighbor_notes(
+    *,
+    pbx_family: str,
+    pbx_dialect: str,
+    transport: str,
+    pms_family: str,
+    pms_protocol: str,
+    direction_value: str,
+) -> str | None:
+    """Explain transport-only near misses without turning them into claims.
+
+    Application/profile evidence does not qualify a different transport. This helper
+    deliberately keeps the returned result UNSUPPORTED while making the failure useful
+    to a technician. It is especially important for evidence-indexed rows such as
+    EPIT-HIT/EPIT-HIT2 whose transport is still unknown.
+    """
+
+    dimensions = (
+        pbx_family.casefold(),
+        pbx_dialect.casefold(),
+        pms_family.casefold(),
+        pms_protocol.casefold(),
+        direction_value,
+    )
+    neighbors = [
+        entry
+        for entry in COMPATIBILITY_MATRIX
+        if (
+            entry.pbx_family.casefold(),
+            entry.pbx_dialect.casefold(),
+            entry.pms_family.casefold(),
+            entry.pms_protocol.casefold(),
+            entry.direction.value,
+        ) == dimensions
+    ]
+    if not neighbors:
+        return None
+
+    requested = transport.strip().lower()
+    if any(entry.transport.casefold() == "unknown" for entry in neighbors):
+        return (
+            "An evidence-indexed compatibility lineage exists for this exact PBX/PMS application combination, "
+            f"but its transport remains evidence-unqualified. Requested transport '{requested}' is not verified. "
+            "Do not inherit generic serial/TCP settings or promote application/profile evidence into transport truth. "
+            "Obtain profile-bound transport evidence or a sanitized wire capture before creating an exact transport row."
+        )
+
+    qualified = ", ".join(sorted({entry.transport.lower() for entry in neighbors}))
+    return (
+        "Evidence-indexed matrix row(s) for this exact PBX/PMS application combination exist only for "
+        f"transport(s): {qualified}. Requested transport '{requested}' has no exact row. Transport is a separate "
+        "compatibility dimension; do not transpose framing, timing, handshake, or application behavior across "
+        "transports without transport-specific evidence."
+    )
+
+
 def find_compatibility(
     *,
     pbx_family: str,
@@ -206,6 +262,15 @@ def find_compatibility(
     entry = _INDEX.get(key)
     if entry is not None:
         return entry
+
+    transport_notes = _transport_neighbor_notes(
+        pbx_family=pbx_family,
+        pbx_dialect=pbx_dialect,
+        transport=transport,
+        pms_family=pms_family,
+        pms_protocol=pms_protocol,
+        direction_value=direction_value,
+    )
     return CompatibilityEntry(
         pbx_family=pbx_family,
         pbx_dialect=pbx_dialect,
@@ -215,7 +280,10 @@ def find_compatibility(
         direction=Direction(direction_value),
         status=SupportStatus.UNSUPPORTED,
         evidence_class=EvidenceClass.NONE,
-        notes="No verified compatibility row exists for this exact combination. Do not auto-select or infer a different profile.",
+        notes=(
+            transport_notes
+            or "No verified compatibility row exists for this exact combination. Do not auto-select or infer a different profile."
+        ),
     )
 
 
