@@ -55,15 +55,18 @@ def _phonesuite_pms_format_findings(
 
     findings: list[DiagnosticFinding] = []
     for observation in observations:
-        if observation.direction != capture_direction:
-            continue
-        if observation.record_family != "legacy_hotel" or not observation.payload:
+        if observation.direction != capture_direction or not observation.payload:
             continue
 
-        diagnostics = [
-            *diagnose_phonesuite_pms_record_format(observation.payload),
-            *diagnose_phonesuite_pms_source_extension_format(observation.payload),
-        ]
+        # The older policy is intentionally limited to records the generic
+        # observer already identifies as the legacy-hotel family. Direct-manual
+        # extensions are independently self-gating so DID can be diagnosed even
+        # though it is not part of the generic legacy prefix set.
+        diagnostics = []
+        if observation.record_family == "legacy_hotel":
+            diagnostics.extend(diagnose_phonesuite_pms_record_format(observation.payload))
+        diagnostics.extend(diagnose_phonesuite_pms_source_extension_format(observation.payload))
+
         for diagnostic in diagnostics:
             findings.append(
                 DiagnosticFinding(
