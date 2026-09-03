@@ -22,6 +22,8 @@ The permanent fixture replaces the observed room with synthetic room `901` while
 
 `tests/test_mitel_serial_replay_fixture.py` loads the fixture, verifies the privacy/provenance boundary, instantiates the independent Mitel serial state machine from the fixture's scoped environment metadata, and replays both transactions. The expected result is two accepted records (`CHK1`, `CHK0`) and four generated ACK controls: one for each ENQ and one for each framed application record.
 
+The machine-readable six-dimensional compatibility row for `Mitel × legacy MTL-compatible × serial × legacy-hotel-pms × mitel-hospitality × PMS_TO_PBX` now explicitly declares `tests/test_mitel_serial_replay_fixture.py` as deterministic coverage. `tests/test_mitel_serial_matrix_replay_linkage.py` guards that association and proves the replay regression is not transposed into the separate PBX→PMS legacy-source row or used to manufacture an aggregate serial `BIDIRECTIONAL` claim.
+
 ## What this fixture does not establish
 
 The fixture does not qualify a universal Mitel baud rate, parity, data-bit, stop-bit, or flow-control setting. It does not import Mitel TCP reconnect behavior, packet timing, endpoint addresses, or capture-derived field variants into serial. It does not make the serial row `SUPPORTED`, does not create an aggregate serial `BIDIRECTIONAL` claim, and does not establish real-hardware behavior for a specific Mitel model or firmware release.
