@@ -1,0 +1,21 @@
+{
+  "fixtures": [
+    {
+      "id": "matrix-sarvam-micros-opera-field-observation-sanitized",
+      "personality": "pbx-matrix",
+      "protocol": "FIAS",
+      "framing": "stx_etx",
+      "status": "partially_characterized",
+      "sanitized": true,
+      "evidence": "Operator-confirmed Matrix SARVAM UCS field observation in MICROS Opera mode. The PBX initiated TCP toward the PMS and sent an LS record in STX/ETX framing; original date/time values were replaced. No broader link progression, retry timing, port, ENQ/ACK, or guest-event behavior is claimed by this fixture.",
+      "steps": [
+        {
+          "direction": "rx",
+          "hex": "02 4c 53 7c 44 41 30 30 30 31 30 31 7c 54 49 30 30 30 30 30 30 7c 03",
+          "expect_framing": "stx_etx",
+          "expect_record": "link_start"
+        }
+      ]
+    }
+  ]
+}
