@@ -4,7 +4,9 @@ import sys
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "compare-legacy-profiles.py"
+ROOT = Path(__file__).resolve().parents[1]
+COMPARE_SCRIPT = ROOT / "scripts" / "compare-legacy-profiles.py"
+CHARACTERIZE_SCRIPT = ROOT / "scripts" / "characterize-legacy-profile.py"
 
 
 def test_compare_cli_reports_only_sanitized_delta(tmp_path):
@@ -32,7 +34,7 @@ def test_compare_cli_reports_only_sanitized_delta(tmp_path):
     result = subprocess.run(
         [
             sys.executable,
-            str(SCRIPT),
+            str(COMPARE_SCRIPT),
             "--include-record-layouts",
             str(baseline),
             str(candidate),
@@ -61,13 +63,13 @@ def test_compare_cli_reports_only_sanitized_delta(tmp_path):
     assert "never-emit" not in result.stdout
 
 
-def test_compare_cli_fails_closed_when_baseline_is_missing(tmp_path):
-    missing = tmp_path / "missing-profile"
+def test_compare_cli_fails_closed_without_exposing_missing_path(tmp_path):
+    missing = tmp_path / "private-site" / "missing-profile"
     candidate = tmp_path / "candidate"
     candidate.write_text("[pbx-protocol]\nprotocol=SYNTHETIC\n", encoding="utf-8")
 
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), str(missing), str(candidate)],
+        [sys.executable, str(COMPARE_SCRIPT), str(missing), str(candidate)],
         check=False,
         capture_output=True,
         text=True,
@@ -77,4 +79,28 @@ def test_compare_cli_fails_closed_when_baseline_is_missing(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["baseline"] == "missing-profile"
     assert payload["comparisons"] == []
-    assert "error" in payload
+    assert payload["error"] == "profile could not be read"
+    assert str(tmp_path) not in result.stdout
+    assert "private-site" not in result.stdout
+
+
+def test_characterize_cli_fails_closed_without_exposing_missing_path(tmp_path):
+    missing = tmp_path / "private-site" / "psip-pbx-protocol.EPIT-HIT"
+
+    result = subprocess.run(
+        [sys.executable, str(CHARACTERIZE_SCRIPT), str(missing)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    payload = json.loads(result.stdout)
+    assert payload == [
+        {
+            "source_name": "psip-pbx-protocol.EPIT-HIT",
+            "error": "profile could not be read",
+        }
+    ]
+    assert str(tmp_path) not in result.stdout
+    assert "private-site" not in result.stdout
