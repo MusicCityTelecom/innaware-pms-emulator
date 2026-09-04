@@ -81,6 +81,35 @@ def test_pack_embeds_only_registered_sanitized_fixture_documents() -> None:
             assert all(item["sanitized"] is True for item in document["fixtures"])
 
 
+def test_3cx_source_derived_fixture_is_exported_as_data_only_evidence() -> None:
+    pack = build_interop_evidence_pack(repo_root=REPO_ROOT, source_sha=EXACT_SHA)
+    item = next(
+        fixture
+        for fixture in pack["fixtures"]
+        if fixture["path"] == "tests/fixtures/pbx/3cx_mitel_sx2000_pms_to_pbx.json"
+    )
+
+    assert item["pbx_family"] == "3CX"
+    assert item["pbx_dialect"] == "Hotel Module / Mitel SX2000-compatible"
+    assert item["transport"] == "tcp"
+    assert item["pms_family"] == "legacy-hotel-pms"
+    assert item["pms_protocol"] == "mitel-hospitality"
+    assert item["direction"] == "pms_to_pbx"
+    assert item["evidence_class"] == EvidenceClass.LEGACY_SOURCE_PROFILE.value
+    assert item["document"]["sanitized"] is True
+    assert item["document"]["sanitization"] == {
+        "synthetic": True,
+        "guest_pii": False,
+        "vendor_binary": False,
+    }
+    assert len(item["sha256"]) == 64
+
+    boundary = pack["architectural_boundary"]
+    assert boundary["exchange_mode"] == "data_only"
+    assert boundary["runtime_dependency_on_emulator"] is False
+    assert pack["production_claim_policy"]["partial_rows_are_diagnostic_or_test_evidence_only"] is True
+
+
 def test_supported_rows_cannot_lack_a_shareable_fixture() -> None:
     exported_keys = {fixture.matrix_key for fixture in SHAREABLE_FIXTURES}
     for entry in COMPATIBILITY_MATRIX:
