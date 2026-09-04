@@ -54,6 +54,7 @@ git diff --check
 python -m pytest -q \
   tests/test_hitachi_profile_evidence.py \
   tests/test_hitachi_evidence_admission.py \
+  tests/test_hitachi_evidence_admission_cli.py \
   tests/test_legacy_profile_evidence.py \
   tests/test_legacy_profile_compare.py \
   tests/test_compatibility_readiness.py \
@@ -112,11 +113,52 @@ The gate intentionally does **not** resolve `checksum_contract` merely because a
 
 A profile-declared transport is evidence for a transport dimension, not an automatic rewrite of the existing `transport=unknown` row. The admission result sets `matrix_change_required=true` when an explicit transport is observed so a later change can create or review the exact six-dimensional row instead of mutating application evidence into transport truth.
 
+## Deterministic admission report CLI
+
+`scripts/admit-hitachi-profile-evidence.py` turns a reviewed sanitized bundle into one deterministic, consumer-neutral JSON report containing both `EPIT-HIT` and `EPIT-HIT2` admissions. It is an inspection/export tool only. It does not modify configuration, the compatibility matrix, or any runtime interface.
+
+The caller must provide the exact 40-character producer SHA expected inside the bundle. A mismatch fails closed. This prevents a derived report from being detached from the exact emulator revision that characterized the source profiles.
+
+```bash
+python scripts/admit-hitachi-profile-evidence.py \
+  --bundle /tmp/hitachi-profile-evidence.json \
+  --expected-source-sha "$SHA" \
+  --output /tmp/hitachi-admission-report.json
+```
+
+The report repeats the deterministic bundle digest, carries both directional-row admission results, and makes the cross-project contract explicit:
+
+- `compatibility_promotion_authorized=false`;
+- `matrix_changes_require_separate_review=true`;
+- `runtime_dependency_on_emulator=false`;
+- `partial_or_planned_evidence_is_not_production_support=true`.
+
+When a target profile explicitly declares `serial` or TCP transport, the admission report may show that transport as observed while the current matrix row remains `transport=unknown`. In that case `matrix_change_required=true`; the CLI never rewrites the row. The exact transport-specific matrix claim must be created and reviewed separately.
+
+Input/read failures are reported without echoing private source paths. Altered profile/comparison digests, an incomplete claim policy, a producer-SHA mismatch, or other provenance failures return a non-zero status and no compatibility promotion.
+
+To prove the export is deterministic, generate it twice and compare bytes:
+
+```bash
+python scripts/admit-hitachi-profile-evidence.py \
+  --bundle /tmp/hitachi-profile-evidence.json \
+  --expected-source-sha "$SHA" \
+  --output /tmp/hitachi-admission-1.json
+
+python scripts/admit-hitachi-profile-evidence.py \
+  --bundle /tmp/hitachi-profile-evidence.json \
+  --expected-source-sha "$SHA" \
+  --output /tmp/hitachi-admission-2.json
+
+cmp /tmp/hitachi-admission-1.json /tmp/hitachi-admission-2.json
+sha256sum /tmp/hitachi-admission-1.json
+```
+
 ## How this can be reused by the UCP Hospitality PMS Gateway
 
 The InnAware PMS-PBX Emulator and the InnAware UCP Hospitality PMS Gateway remain separate products and codebases.
 
-A reviewed Hitachi evidence bundle and its admission result may be supplied to the UCP project as **data/test evidence** together with the exact emulator producer SHA and bundle/source digests. The UCP project may use those facts to create its own independent production adapter tests or copy a synthetic fixture into its own test resources. It must not import `innaware_pms_emulator`, the emulator API/UI, simulator orchestration, or technician-support runtime.
+A reviewed Hitachi evidence bundle and its deterministic admission report may be supplied to the UCP project as **data/test evidence** together with the exact emulator producer SHA and bundle/source digests. The UCP project may use those facts to create its own independent production adapter tests or copy a synthetic fixture into its own test resources. It must not import `innaware_pms_emulator`, the emulator API/UI, simulator orchestration, or technician-support runtime.
 
 This is the same artifact/evidence exchange boundary used by the consumer-neutral interoperability evidence pack: evidence can cross repositories; runtime ownership does not.
 
