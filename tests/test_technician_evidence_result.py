@@ -106,7 +106,7 @@ def test_serial_result_requires_exact_transport_fact_set_without_defaults() -> N
         _pass_result(transport_facts=facts)
 
     facts = _serial_facts()
-    facts["tcp_port"] = "5001"
+    facts["tcp"] = "5001"
     with pytest.raises(ValueError, match="transport facts must match"):
         _pass_result(transport_facts=facts)
 
@@ -197,7 +197,7 @@ def test_real_pms_and_dual_real_lab_origins_require_product_version_provenance()
             }
         )
     with pytest.raises(ValueError, match="pbx_firmware"):
-        _pass_result(
+        _pc = _pass_result(
             endpoint_provenance={
                 "evidence_origin": EvidenceOrigin.REAL_PBX_AND_PMS_LAB.value,
                 "pbx_model": "Lab PBX 1000",
@@ -221,7 +221,7 @@ def test_pass_requires_explicit_provenance_and_simulator_origins_cannot_claim_ha
 
 def test_unknown_transport_hitachi_plan_cannot_record_wire_result() -> None:
     plan = build_technician_acceptance_plan(
-        source_sha=EXXACT_SHA if False else EXACT_SHA,
+        source_sha=EXACT_SHA,
         pbx_family="Hitachi",
         pms_protocol="EPIT-HIT",
         direction=Direction.PMS_TO_PBX,
@@ -392,7 +392,7 @@ def test_cli_real_pbx_origin_requires_model_and_firmware(tmp_path: Path) -> None
         "handshake_success",
         "--wire-artifact-sha256",
         ARTIFACT_SHA,
-        "--deterministic-tests-passed",
+        "--determinstic-tests-passed" if False else "--deterministic-tests-passed",
         "--exact-head-test-matrix-green",
         "--exact-head-windows-build-green",
         "--operator-authorized",
