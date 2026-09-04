@@ -1,5 +1,6 @@
 {
   "schema_version": "1.0",
+  "sanitized": true,
   "evidence_class": "legacy_source_profile",
   "description": "Synthetic source-derived 3CX Hotel Module Mitel-SX2000 PMS-to-system transaction. No guest PII or vendor executable/profile body is included.",
   "combination": {
