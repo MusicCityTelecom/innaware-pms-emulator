@@ -14,6 +14,8 @@ Project evidence contains an operator-observed Matrix SARVAM UCS MICROS Opera/FI
 
 The committed fixture is synthetic/redacted. Date/time values are synthetic and guest records are deliberately omitted. The diagnostic report stores record codes, LR record-type identifiers, wire lengths, capture indexes, and SHA-256 digests rather than raw application payloads.
 
+The accepted progression is deliberately bounded. Only `LR` declarations that occur after the selected `LD` and before the first following `LA` belong to that completed link attempt. Later `LR` traffic is still reported as observed evidence, but it does not invalidate a previously completed progression or silently widen the declaration set attributed to that progression. Likewise, an `LA` observed before the selected `LD` cannot satisfy that later link attempt.
+
 This evidence does **not** qualify a universal Matrix TCP port, ENQ/ACK behavior, retry timing, guest-event field semantics, broader Matrix model coverage, or a production interoperability claim. The existing compatibility row therefore remains `PARTIAL / OPERATOR_CONFIRMED / TCP / PBX_TO_PMS`.
 
 ## Technician use
@@ -27,9 +29,9 @@ python scripts/diagnose-matrix-fias-link.py \
   --output /tmp/matrix-fias-link-report.json
 ```
 
-A healthy bounded observation reports `exact_progression_observed=true` and the finding `matrix-fias-link-progression-observed`.
+A healthy bounded observation reports `exact_progression_observed=true` and the finding `matrix-fias-link-progression-observed`. `lr_record_types` contains only declarations inside the selected `LD ... LA` progression; `observed_lr_record_types` retains all recognized PBX-originated LR declarations in the capture for technician context.
 
-If `LS` is observed but no PMS `LS` reply follows, fix the PMS role/listener behavior before troubleshooting room-event records. If the PMS `LS` reply is CR/LF-framed rather than STX/ETX-framed, use the Matrix MICROS Opera profile's field-observed STX/ETX framing. If `LD`/`LR` arrive but `LA` does not, keep the capture running through the end of link negotiation and do not call the link active from `LD`/`LR` alone.
+If `LS` is observed but no PMS `LS` reply follows, fix the PMS role/listener behavior before troubleshooting room-event records. If the PMS `LS` reply is CR/LF-framed rather than STX/ETX-framed, use the Matrix MICROS Opera profile's field-observed STX/ETX framing. If `LD`/`LR` arrive but no later `LA` completes that same attempt, keep the capture running through the end of link negotiation and do not call the link active from `LD`/`LR` alone.
 
 ## Codex / live validation
 

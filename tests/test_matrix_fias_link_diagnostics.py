@@ -46,6 +46,7 @@ def test_matrix_fias_link_progression_is_bounded_and_payload_safe():
     assert report["pbx_lr_count"] == 3
     assert report["pbx_la_count"] == 1
     assert report["lr_record_types"] == ["GI", "GO", "RE"]
+    assert report["observed_lr_record_types"] == ["GI", "GO", "RE"]
 
     finding_ids = {item["id"] for item in report["findings"]}
     assert "matrix-fias-link-progression-observed" in finding_ids
@@ -88,6 +89,53 @@ def test_matrix_fias_link_diagnostics_report_incomplete_negotiation():
     finding_ids = {item["id"] for item in report["findings"]}
     assert "matrix-fias-link-negotiation-incomplete" in finding_ids
     assert "matrix-fias-link-progression-observed" not in finding_ids
+
+
+def test_matrix_fias_link_diagnostics_require_la_after_selected_ld_attempt():
+    captures = _captures()[:-1]
+    captures.insert(
+        2,
+        {
+            "direction": "rx",
+            "hex": "02 4c 41 7c 44 41 30 30 30 31 30 31 7c 54 49 30 30 30 30 30 30 7c 03",
+        },
+    )
+    report = analyze_matrix_fias_link_progression(
+        captures,
+        transport="tcp",
+        pbx_direction="rx",
+        evidence_class="operator_confirmed",
+    )
+
+    assert report["pbx_la_count"] == 1
+    assert report["progression_capture_indexes"]["pbx_ld"] is not None
+    assert report["progression_capture_indexes"]["pbx_la"] is None
+    assert report["exact_progression_observed"] is False
+    finding_ids = {item["id"] for item in report["findings"]}
+    assert "matrix-fias-link-negotiation-incomplete" in finding_ids
+
+
+def test_matrix_fias_link_progression_ignores_post_la_lr_noise():
+    captures = _captures()
+    captures.append(
+        {
+            "direction": "rx",
+            "hex": "02 4c 52 7c 52 54 4d 57 7c 03",
+        }
+    )
+    report = analyze_matrix_fias_link_progression(
+        captures,
+        transport="tcp",
+        pbx_direction="rx",
+        evidence_class="operator_confirmed",
+    )
+
+    assert report["exact_progression_observed"] is True
+    assert report["pbx_lr_count"] == 4
+    assert report["lr_record_types"] == ["GI", "GO", "RE"]
+    assert report["observed_lr_record_types"] == ["GI", "GO", "RE", "MW"]
+    assert report["progression_capture_indexes"]["pbx_lr"] == [3, 4, 5]
+    assert report["progression_capture_indexes"]["pbx_la"] == 6
 
 
 def test_matrix_fias_link_diagnostics_detect_wrong_ls_reply_framing():

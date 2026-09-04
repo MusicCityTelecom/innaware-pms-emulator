@@ -94,6 +94,11 @@ def analyze_matrix_fias_link_progression(
     PBX-originated LD/LR declarations, then PBX-originated LA. It does not infer
     guest-event support, a site TCP port, ENQ/ACK semantics, retry policy, or a
     compatibility promotion.
+
+    The accepted LR declaration set is bounded by the selected LD and the first LA
+    that follows it. Later LR traffic remains observable evidence but cannot make an
+    already complete link progression fail or silently widen the accepted declaration
+    set for that progression.
     """
 
     normalized_transport = transport.strip().lower()
@@ -146,6 +151,7 @@ def analyze_matrix_fias_link_progression(
     pbx_la = [item for item in pbx_records if item["record_code"] == "LA"]
 
     exact_progression = False
+    bounded_lr_items: list[dict[str, Any]] = []
     progression_indexes: dict[str, Any] = {
         "pbx_ls": None,
         "pms_ls_reply": None,
@@ -170,33 +176,42 @@ def analyze_matrix_fias_link_progression(
             if ld is not None:
                 ld_index = ld["capture_index"]
                 progression_indexes["pbx_ld"] = ld_index
-                lr_items = [
-                    item
-                    for item in pbx_lr
-                    if item["capture_index"] > ld_index
-                ]
-                progression_indexes["pbx_lr"] = [
-                    item["capture_index"] for item in lr_items
-                ]
-                if lr_items:
-                    last_lr_index = lr_items[-1]["capture_index"]
-                    la = next(
-                        (
-                            item
-                            for item in pbx_la
-                            if item["capture_index"] > last_lr_index
-                        ),
-                        None,
-                    )
-                    if la is not None:
-                        progression_indexes["pbx_la"] = la["capture_index"]
+                la = next(
+                    (
+                        item
+                        for item in pbx_la
+                        if item["capture_index"] > ld_index
+                    ),
+                    None,
+                )
+                if la is not None:
+                    la_index = la["capture_index"]
+                    bounded_lr_items = [
+                        item
+                        for item in pbx_lr
+                        if ld_index < item["capture_index"] < la_index
+                    ]
+                    progression_indexes["pbx_lr"] = [
+                        item["capture_index"] for item in bounded_lr_items
+                    ]
+                    if bounded_lr_items:
+                        progression_indexes["pbx_la"] = la_index
                         exact_progression = (
                             pbx_ls[0]["framing"] == "stx_etx"
                             and reply["framing"] == "stx_etx"
                             and ld["framing"] == "stx_etx"
-                            and all(item["framing"] == "stx_etx" for item in lr_items)
+                            and all(
+                                item["framing"] == "stx_etx"
+                                for item in bounded_lr_items
+                            )
                             and la["framing"] == "stx_etx"
                         )
+                else:
+                    progression_indexes["pbx_lr"] = [
+                        item["capture_index"]
+                        for item in pbx_lr
+                        if item["capture_index"] > ld_index
+                    ]
 
     findings: list[dict[str, Any]] = []
     if exact_progression:
@@ -230,13 +245,13 @@ def analyze_matrix_fias_link_progression(
                     ),
                 }
             )
-        if len(pbx_ls) >= 2 and not pbx_la:
+        if len(pbx_ls) >= 2 and progression_indexes["pbx_la"] is None:
             findings.append(
                 {
                     "id": "matrix-fias-link-start-retrying",
                     "severity": "warning",
                     "confidence": "medium",
-                    "summary": "Multiple PBX-originated LS records were observed without PBX LA.",
+                    "summary": "Multiple PBX-originated LS records were observed without a bounded PBX LA completion.",
                     "corrective_action": (
                         "Check the LS reply framing and capture subsequent LD/LR/LA traffic. "
                         "Do not infer a retry timer from this observation."
@@ -255,8 +270,8 @@ def analyze_matrix_fias_link_progression(
                     ),
                 }
             )
-        if pbx_ld or pbx_lr:
-            if not pbx_la:
+        if progression_indexes["pbx_ld"] is not None and progression_indexes["pbx_lr"]:
+            if progression_indexes["pbx_la"] is None:
                 findings.append(
                     {
                         "id": "matrix-fias-link-negotiation-incomplete",
@@ -264,7 +279,7 @@ def analyze_matrix_fias_link_progression(
                         "confidence": "high",
                         "summary": (
                             "PBX LD/LR link-description traffic was observed, but no PBX LA "
-                            "was captured after it."
+                            "was captured after that LD/LR attempt."
                         ),
                         "corrective_action": (
                             "Keep the connection open and capture through LA or link teardown. "
@@ -303,6 +318,11 @@ def analyze_matrix_fias_link_progression(
         "pbx_lr_count": len(pbx_lr),
         "pbx_la_count": len(pbx_la),
         "lr_record_types": [
+            item["record_type"]
+            for item in bounded_lr_items
+            if item["record_type"] is not None
+        ],
+        "observed_lr_record_types": [
             item["record_type"]
             for item in pbx_lr
             if item["record_type"] is not None
