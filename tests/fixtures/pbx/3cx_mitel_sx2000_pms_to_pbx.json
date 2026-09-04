@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "evidence_class": "legacy_source_profile",
+  "description": "Synthetic source-derived 3CX Hotel Module Mitel-SX2000 PMS-to-system transaction. No guest PII or vendor executable/profile body is included.",
+  "combination": {
+    "pbx_family": "3CX",
+    "pbx_dialect": "Hotel Module / Mitel SX2000-compatible",
+    "transport": "tcp",
+    "pms_family": "legacy-hotel-pms",
+    "pms_protocol": "mitel-hospitality",
+    "direction": "pms_to_pbx"
+  },
+  "sanitization": {
+    "synthetic": true,
+    "guest_pii": false,
+    "vendor_binary": false
+  },
+  "captures": [
+    {"direction": "tx", "hex": "05"},
+    {"direction": "rx", "hex": "06"},
+    {"direction": "tx", "hex": "0243484b3120202031303103"},
+    {"direction": "rx", "hex": "06"}
+  ]
+}
