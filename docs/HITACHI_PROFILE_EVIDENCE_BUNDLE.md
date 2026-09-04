@@ -53,6 +53,7 @@ SHA="$(git rev-parse HEAD)"
 git diff --check
 python -m pytest -q \
   tests/test_hitachi_profile_evidence.py \
+  tests/test_hitachi_evidence_admission.py \
   tests/test_legacy_profile_evidence.py \
   tests/test_legacy_profile_compare.py \
   tests/test_compatibility_readiness.py \
@@ -93,21 +94,40 @@ PY
 
 Do not commit the raw profiles. Do not commit an unreviewed derived bundle merely because the characterizer marks it sanitized. Promote only the minimum facts needed for deterministic synthetic fixtures and compatibility claims.
 
+## Evidence admission gate
+
+`innaware_pms_emulator.hitachi_evidence_admission` is the machine-readable bridge between a reviewed sanitized bundle and the existing compatibility-readiness registry. It validates the exact three profile identities, all profile SHA-256 values, comparison lineage and digests, the producer repository and exact producer Git SHA, the data-only claim policy, and the expected schema before interpreting any fact.
+
+The admission result is deliberately narrower than the bundle. It reports `resolved_gap_codes`, `remaining_gap_codes`, technician actions, source digests, the current matrix status/transport, and whether a newly observed explicit transport would require a reviewed matrix change. `compatibility_promotion_authorized` is always false: evidence admission never edits or promotes the compatibility registry.
+
+The gate can resolve only facts the sanitized profile characterization itself proves:
+
+- `profile_body` after the complete three-profile lineage and digests validate;
+- `record_layout` when recognized CHK/NAM application layouts or equivalent safe CHK/NAM mask layouts are present;
+- `framing_control` only when ENQ, STX, ETX, ACK, and NAK are all explicitly present in the target profile characterization;
+- `transport` only when the target profile contains a recognized explicit transport key;
+- `profile_delta` for EPIT-HIT2 only when the EPIT-HIT→EPIT-HIT2 sanitized comparison isolates room/name-related record or mask changes.
+
+The gate intentionally does **not** resolve `checksum_contract` merely because a profile has a `checksum` scalar. A scalar such as `checksum=0` does not, by itself, establish checksum/BCC algorithm, byte coverage, placement, or receiver behavior. It also cannot resolve reverse direction, timing/retry semantics, or real-hardware interoperability. Those require separate direct or wire evidence.
+
+A profile-declared transport is evidence for a transport dimension, not an automatic rewrite of the existing `transport=unknown` row. The admission result sets `matrix_change_required=true` when an explicit transport is observed so a later change can create or review the exact six-dimensional row instead of mutating application evidence into transport truth.
+
 ## How this can be reused by the UCP Hospitality PMS Gateway
 
 The InnAware PMS-PBX Emulator and the InnAware UCP Hospitality PMS Gateway remain separate products and codebases.
 
-A reviewed Hitachi evidence bundle may be supplied to the UCP project as **data/test evidence** together with its exact emulator producer SHA and bundle/source digests. The UCP project may use those facts to create its own independent production adapter tests or copy a synthetic fixture into its own test resources. It must not import `innaware_pms_emulator`, the emulator API/UI, simulator orchestration, or technician-support runtime.
+A reviewed Hitachi evidence bundle and its admission result may be supplied to the UCP project as **data/test evidence** together with the exact emulator producer SHA and bundle/source digests. The UCP project may use those facts to create its own independent production adapter tests or copy a synthetic fixture into its own test resources. It must not import `innaware_pms_emulator`, the emulator API/UI, simulator orchestration, or technician-support runtime.
 
 This is the same artifact/evidence exchange boundary used by the consumer-neutral interoperability evidence pack: evidence can cross repositories; runtime ownership does not.
 
 ## Promotion path after real evidence arrives
 
-A useful real bundle can close readiness gaps one at a time:
+A useful real bundle can close readiness gaps one at a time through the admission gate:
 
-- an explicit transport key may resolve the transport gap;
-- exact ENQ/STX/ETX/ACK/NAK or checksum fields may resolve framing/control or checksum gaps;
-- recognized CHK/NAM and `[pbx-masks]` differences may resolve the EPIT-HIT2 room/name-layout delta;
-- absent fields stay unknown rather than being inherited from another profile.
+- an explicit recognized transport key can resolve the evidence-acquisition transport gap while still requiring a reviewed exact matrix row;
+- complete explicit ENQ/STX/ETX/ACK/NAK values can resolve the framing/control evidence gap;
+- recognized CHK/NAM and `[pbx-masks]` facts can resolve the record-layout gap;
+- a sanitized EPIT-HIT→EPIT-HIT2 room/name-only delta can resolve the EPIT-HIT2 profile-delta gap;
+- absent or ambiguous fields stay unknown rather than being inherited from another profile.
 
-Even a complete profile bundle does not establish reverse-direction behavior, timing/retry semantics, or successful hardware interoperability. Those require separate evidence before any corresponding matrix promotion.
+Even a complete profile bundle does not establish checksum semantics, reverse-direction behavior, timing/retry semantics, or successful hardware interoperability. Those require separate evidence before any corresponding matrix promotion. A successful admission therefore means only that specific readiness gaps have evidence; it is never equivalent to `PARTIAL` or `SUPPORTED` compatibility by itself.
