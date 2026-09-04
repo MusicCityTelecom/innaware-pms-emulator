@@ -229,7 +229,7 @@ def test_candidate_statuses_require_matching_observation_shape() -> None:
         observation_codes=["transport_opened", "frame_rejected"],
     )
     assert rejected["result"]["status"] == "rejected"
-    assert any("does not" in item and "why" in item for item in rejected["technician_diagnostics"])
+    assert any("not why" in item for item in rejected["technician_diagnostics"])
 
 
 def test_candidate_rejects_weak_evidence_abbreviated_sha_and_invalid_digests() -> None:
