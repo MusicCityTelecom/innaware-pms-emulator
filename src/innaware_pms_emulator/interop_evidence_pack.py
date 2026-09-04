@@ -125,6 +125,17 @@ SHAREABLE_FIXTURES: tuple[ShareableFixture, ...] = (
         evidence_class=EvidenceClass.OPERATOR_CONFIRMED,
         purpose="Sanitized Matrix SARVAM MICROS Opera TCP STX/ETX FIAS LS field-observation fixture.",
     ),
+    ShareableFixture(
+        path="tests/fixtures/pbx/3cx_mitel_sx2000_pms_to_pbx.json",
+        pbx_family="3CX",
+        pbx_dialect="Hotel Module / Mitel SX2000-compatible",
+        transport="tcp",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.PMS_TO_PBX,
+        evidence_class=EvidenceClass.LEGACY_SOURCE_PROFILE,
+        purpose="Synthetic source-derived 3CX Hotel Module Mitel-SX2000 PMS-to-PBX transaction evidence without guest PII or vendor material.",
+    ),
 )
 
 
