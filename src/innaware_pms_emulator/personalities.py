@@ -187,6 +187,27 @@ PERSONALITIES: dict[str, EndpointPersonality] = {
         compatibility_family="hitachi",
         brand="Hitachi",
     ),
+    "pbx-3cx": EndpointPersonality(
+        id="pbx-3cx",
+        name="3CX Hotel Module",
+        purpose=InterfacePurpose.PMS,
+        role=EmulationRole.PBX,
+        maturity="source-backed",
+        description=(
+            "3CX Hotel Module personality for the documented Mitel SX2000-compatible PMS integration. "
+            "3CX is modeled as its own PBX family even though this integration deliberately uses Mitel-compatible application semantics."
+        ),
+        protocols=("MITEL SX2000",),
+        recommended_profile="3cx-mitel-sx2000-tcp-client",
+        notes=(
+            "Current 3CX Hotel Services documentation states that the Mitel SX2000 PMS integration makes 3CX the server and the PMS sends messages to it; the Emulator therefore uses a PMS-side TCP client profile for this exact mode.",
+            "The Hotel Services IP address and port are site configuration, not universal protocol constants; no port is supplied by the built-in profile.",
+            "The documented ENQ/ACK/STX-text-ETX application behavior may reuse the Mitel-compatible transaction engine without treating 3CX as a Mitel PBX.",
+            "Mitel-SX2000 hotel billing is not carried by this PMS protocol; keep any 3CX CDR/billing interface separate from the PMS application session.",
+        ),
+        compatibility_family="mitel_hospitality",
+        brand="3CX",
+    ),
     "pbx-innaware-ucp": EndpointPersonality(
         id="pbx-innaware-ucp",
         name="InnAware UCP",
