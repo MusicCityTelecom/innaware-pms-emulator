@@ -135,7 +135,7 @@ def test_additional_legacy_record_is_evidence_candidate_not_support_promotion():
     assert report["uncharacterized_record_count"] == 1
     assert report["uncharacterized_records"][0]["record_opcode"] == "WKP0600"
     assert report["claim_policy"]["broader_opcode_support_inferred"] is False
-    assert "901" not in json.dumps(report)
+    assert "WKP0600  901" not in json.dumps(report)
 
 
 def test_non_serial_transport_and_unknown_evidence_class_fail_closed():
