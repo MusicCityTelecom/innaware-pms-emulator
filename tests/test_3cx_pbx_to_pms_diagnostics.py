@@ -40,6 +40,7 @@ def test_source_documented_maid_status_is_direction_qualified_and_payload_safe()
         pbx_direction="rx",
     )
 
+    assert report["schema_version"] == "1.1"
     assert report["matrix_claim"] == "candidate_only_not_registered"
     assert report["source_direction_qualified_record_count"] == 1
     assert report["exact_maid_status_record_count"] == 1
@@ -53,7 +54,10 @@ def test_source_documented_maid_status_is_direction_qualified_and_payload_safe()
 
     contract = report["reference_contract"]
     assert contract["maid_status_station_digits_max"] == 5
-    assert contract["pbx_to_pms_handshake_qualified"] is False
+    assert contract["source_bidirectional_link_control_pattern"] == "ENQ/ACK/STX-text-ETX/ACK"
+    assert contract["source_bidirectional_link_control_pattern_qualified"] is True
+    assert contract["pbx_to_pms_transaction_correlation_qualified"] is False
+    assert contract["pbx_to_pms_timing_qualified"] is False
     assert contract["pbx_to_pms_retry_policy_qualified"] is False
     assert contract["pbx_to_pms_checksum_contract_qualified"] is False
     assert report["claim_policy"]["matrix_registration_authorized"] is False
@@ -63,7 +67,7 @@ def test_source_documented_maid_status_is_direction_qualified_and_payload_safe()
     assert "STS2 101" not in encoded
 
 
-def test_message_registration_direction_is_source_backed_but_layout_stays_unqualified():
+def test_message_registration_direction_and_fee_width_are_source_backed_but_layout_stays_unqualified():
     report = analyze_3cx_pbx_to_pms_observations(
         _capture(("tx", MSG_MINIMAL)),
         transport="tcp",
@@ -76,11 +80,18 @@ def test_message_registration_direction_is_source_backed_but_layout_stays_unqual
     item = report["message_registration_candidates"][0]
     assert item["record_code"] == "MSG"
     assert item["field_layout_qualified"] is False
-    assert report["reference_contract"]["message_registration_field_layout_qualified"] is False
-    assert any(
-        finding["id"] == "3cx-pbx-to-pms-message-registration-layout-unqualified"
+    assert item["fee_status_width_bytes"] == 4
+    assert item["fee_status_width_source_qualified"] is True
+    contract = report["reference_contract"]
+    assert contract["message_registration_fee_status_width_bytes"] == 4
+    assert contract["message_registration_fee_status_width_qualified"] is True
+    assert contract["message_registration_field_layout_qualified"] is False
+    finding = next(
+        finding
         for finding in report["findings"]
+        if finding["id"] == "3cx-pbx-to-pms-message-registration-layout-unqualified"
     )
+    assert finding["fee_status_width_bytes"] == 4
 
 
 def test_capture_endpoint_direction_is_never_inferred_from_opcode():
@@ -115,6 +126,8 @@ def test_other_legacy_record_and_peer_control_remain_evidence_candidates():
         finding["id"] == "3cx-pbx-to-pms-control-bytes-not-transaction-correlated"
         for finding in report["findings"]
     )
+    assert report["claim_policy"]["bidirectional_link_pattern_does_not_infer_direction_specific_timing_or_retries"] is True
+    assert report["claim_policy"]["pbx_to_pms_transaction_state_machine_inferred"] is False
 
 
 def test_tcp_only_and_explicit_pbx_direction_fail_closed():

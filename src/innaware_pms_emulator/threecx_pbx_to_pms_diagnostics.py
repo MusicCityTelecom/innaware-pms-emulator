@@ -28,6 +28,8 @@ _MAID_STATUS = {
     "9": "vacant_not_clean",
 }
 _MAID_RE = re.compile(r"^STS([1-9]) +([0-9]{1,5})$")
+_MESSAGE_REGISTRATION_FEE_STATUS_WIDTH_BYTES = 4
+_SOURCE_BIDIRECTIONAL_LINK_PATTERN = "ENQ/ACK/STX-text-ETX/ACK"
 
 
 def _normalize_choice(value: str, *, name: str, allowed: set[str]) -> str:
@@ -63,10 +65,11 @@ def analyze_3cx_pbx_to_pms_observations(
 
     The current public 3CX PMS specification explicitly documents two records sent
     by the system to the PMS: Message Registration (MSG) and Maid Status (STS).
-    This analyzer preserves that direction evidence without inventing a reverse
-    transaction state machine. In particular, it does not infer a system-originated
-    ENQ/ACK timing contract, retry policy, checksum contract, universal TCP port, or
-    a registered PBX_TO_PMS compatibility row.
+    It also describes the PMS/System link as bidirectional and identifies the
+    ENQ/ACK/STX-text-ETX/ACK link pattern. This analyzer preserves those source facts
+    without inventing a reverse transaction state machine. In particular, it does not
+    infer system-originated timing/retry semantics, a checksum contract, universal
+    TCP port, or compatibility promotion from the presence of those source facts.
     """
 
     normalized_transport = _normalize_choice(
@@ -134,10 +137,14 @@ def analyze_3cx_pbx_to_pms_observations(
             else:
                 framing_candidates.append(source_record)
         else:
-            # The retrievable text source establishes MSG direction and semantics,
-            # but its rendered field-layout diagram is not available as text. Keep
-            # MSG as a source-backed direction candidate without inventing offsets.
-            message_registration_candidates.append(source_record)
+            # The source establishes MSG direction/semantics and that its fee/status
+            # field is four bytes, but the retrievable field-layout diagram does not
+            # justify exact offsets. Preserve the known scalar without inventing a
+            # parser contract.
+            message = dict(source_record)
+            message["fee_status_width_bytes"] = _MESSAGE_REGISTRATION_FEE_STATUS_WIDTH_BYTES
+            message["fee_status_width_source_qualified"] = True
+            message_registration_candidates.append(message)
 
     findings: list[dict[str, Any]] = []
     if exact_maid_status_records:
@@ -149,7 +156,7 @@ def analyze_3cx_pbx_to_pms_observations(
                 "summary": (
                     "A PBX-originated STX/ETX Maid Status record matches the source-documented "
                     "STS1..STS9 plus station-number shape. This is record/direction evidence only; "
-                    "it does not establish the surrounding reverse transaction handshake."
+                    "it does not establish a direction-specific reverse transaction state machine."
                 ),
                 "record_count": len(exact_maid_status_records),
             }
@@ -162,10 +169,11 @@ def analyze_3cx_pbx_to_pms_observations(
                 "confidence": "high",
                 "summary": (
                     "A PBX-originated MSG record matches the source-documented Message Registration "
-                    "family, but exact field offsets/layout remain unqualified by the retrievable text source. "
-                    "Retain the wire digest and obtain sanitized field evidence before implementing a formatter/parser contract."
+                    "family. The source qualifies a four-byte fee/status field, but exact field offsets/layout "
+                    "remain unqualified. Retain the wire digest and obtain sanitized field evidence before implementing a formatter/parser contract."
                 ),
                 "record_count": len(message_registration_candidates),
+                "fee_status_width_bytes": _MESSAGE_REGISTRATION_FEE_STATUS_WIDTH_BYTES,
             }
         )
     if framing_candidates:
@@ -201,8 +209,10 @@ def analyze_3cx_pbx_to_pms_observations(
                 "severity": "info",
                 "confidence": "high",
                 "summary": (
-                    "ENQ/ACK/NAK control bytes were observed, but this analyzer does not correlate them into a "
-                    "3CX-originated transaction state machine. Capture timing/order must be reviewed before claiming reverse handshake or retry behavior."
+                    "ENQ/ACK/NAK control bytes were observed. The source qualifies the link as bidirectional "
+                    "and identifies the ENQ/ACK/STX-text-ETX/ACK pattern, but this analyzer does not correlate "
+                    "observed controls into a direction-specific 3CX-originated transaction state machine. "
+                    "Capture timing/order must be reviewed before claiming reverse timing or retry behavior."
                 ),
                 "pbx_control_count": len(pbx_controls),
                 "pms_control_count": len(peer_controls),
@@ -210,7 +220,7 @@ def analyze_3cx_pbx_to_pms_observations(
         )
 
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "diagnostic_profile": "3cx_mitel_sx2000_pbx_to_pms_source_candidate",
         "combination_candidate": {
             "pbx_family": "3CX",
@@ -227,14 +237,19 @@ def analyze_3cx_pbx_to_pms_observations(
         "reference_contract": {
             "source_qualified_pbx_record_codes": sorted(_SOURCE_QUALIFIED_PBX_RECORD_CODES),
             "application_framing": "STX/message/ETX",
+            "source_bidirectional_link_control_pattern": _SOURCE_BIDIRECTIONAL_LINK_PATTERN,
+            "source_bidirectional_link_control_pattern_qualified": True,
             "maid_status_codes": {f"STS{key}": value for key, value in _MAID_STATUS.items()},
             "maid_status_station_digits_max": 5,
             "message_registration_direction": "system_to_pms",
             "message_registration_semantics": (
                 "Outside-call registration/counting using meter-pulse-derived status; the status/fee field is documented as four bytes."
             ),
+            "message_registration_fee_status_width_bytes": _MESSAGE_REGISTRATION_FEE_STATUS_WIDTH_BYTES,
+            "message_registration_fee_status_width_qualified": True,
             "message_registration_field_layout_qualified": False,
-            "pbx_to_pms_handshake_qualified": False,
+            "pbx_to_pms_transaction_correlation_qualified": False,
+            "pbx_to_pms_timing_qualified": False,
             "pbx_to_pms_retry_policy_qualified": False,
             "pbx_to_pms_checksum_contract_qualified": False,
             "site_port_is_configured_not_universal": True,
@@ -244,7 +259,8 @@ def analyze_3cx_pbx_to_pms_observations(
             "3cx_identity_preserved": True,
             "transport_inferred": False,
             "site_port_inferred": False,
-            "pbx_to_pms_handshake_inferred": False,
+            "bidirectional_link_pattern_does_not_infer_direction_specific_timing_or_retries": True,
+            "pbx_to_pms_transaction_state_machine_inferred": False,
             "pbx_to_pms_retry_policy_inferred": False,
             "message_registration_layout_inferred": False,
             "billing_or_cdr_transport_inferred": False,
@@ -271,9 +287,9 @@ def analyze_3cx_pbx_to_pms_observations(
             "Record the actual Hotel Services address and site-configured TCP port; never promote one installation value into a protocol default.",
             "Explicitly identify which capture direction is 3CX-originated; do not infer endpoint roles from MSG or STS text alone.",
             "Trigger Maid Status with a synthetic room and preserve an STS1..STS9 frame plus exact wire SHA-256; do not retain guest PII.",
-            "If Message Registration is exercised, preserve a sanitized MSG frame so its exact field layout can be qualified without guessing from an omitted diagram.",
-            "Capture any surrounding ENQ/ACK/NAK bytes and timestamps, but treat them as reverse-handshake evidence candidates until reviewed.",
+            "If Message Registration is exercised, preserve a sanitized MSG frame; the source qualifies a four-byte fee/status field but not its exact offsets.",
+            "Capture any surrounding ENQ/ACK/NAK bytes and timestamps. The source qualifies the bidirectional link pattern, but direction-specific timing/retry behavior still requires reviewed evidence.",
             "Keep the separate 3CX CDR/billing interface outside this PMS application-protocol diagnostic.",
-            "Do not register or promote a PBX-to-PMS matrix row from this source-derived report alone; tie live evidence to an exact Emulator SHA first.",
+            "Do not register or promote a PBX-to-PMS matrix row from this source-derived report alone; tie any field/runtime expansion to an exact Emulator SHA.",
         ],
     }
