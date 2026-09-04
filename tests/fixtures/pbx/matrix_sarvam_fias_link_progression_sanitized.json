@@ -1,0 +1,15 @@
+{
+  "sanitized": true,
+  "synthetic": true,
+  "evidence_class": "operator_confirmed",
+  "evidence": "Synthetic/redacted reproduction of the operator-observed Matrix SARVAM UCS MICROS Opera FIAS link progression. Date/time values are synthetic and no guest records are included.",
+  "captures": [
+    {"direction": "rx", "hex": "02 4c 53 7c 44 41 30 30 30 31 30 31 7c 54 49 30 30 30 30 30 30 7c 03"},
+    {"direction": "tx", "hex": "02 4c 53 7c 44 41 30 30 30 31 30 31 7c 54 49 30 30 30 30 30 31 7c 03"},
+    {"direction": "rx", "hex": "02 4c 44 7c 44 41 30 30 30 31 30 31 7c 54 49 30 30 30 30 30 32 7c 03"},
+    {"direction": "rx", "hex": "02 4c 52 7c 52 54 47 49 7c 52 4e 7c 47 23 7c 47 4e 7c 47 46 7c 47 4c 7c 47 56 7c 43 53 7c 47 41 7c 47 44 7c 47 53 7c 7c 03"},
+    {"direction": "rx", "hex": "02 4c 52 7c 52 54 47 4f 7c 52 4e 7c 47 23 7c 47 53 7c 7c 03"},
+    {"direction": "rx", "hex": "02 4c 52 7c 52 54 52 45 7c 52 4e 7c 4d 4c 7c 44 4e 7c 52 53 7c 43 53 7c 7c 03"},
+    {"direction": "rx", "hex": "02 4c 41 7c 44 41 30 30 30 31 30 31 7c 54 49 30 30 30 30 30 33 7c 03"}
+  ]
+}

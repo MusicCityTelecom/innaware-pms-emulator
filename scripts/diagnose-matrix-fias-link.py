@@ -6,16 +6,15 @@ import json
 from pathlib import Path
 
 from innaware_pms_emulator.matrix_fias_link_diagnostics import (
-    analyze_matrix_fias_link_start,
+    analyze_matrix_fias_link_progression,
 )
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Characterize the evidence-bounded Matrix MICROS Opera/FIAS TCP link-start "
-            "sequence without inferring serial transport, site ports, guest-event support, "
-            "or compatibility promotion."
+            "Characterize the bounded Matrix SARVAM UCS MICROS Opera/FIAS TCP link "
+            "progression without inferring guest-event support, a site port, or retry policy."
         )
     )
     parser.add_argument(
@@ -23,12 +22,8 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
         help="JSON capture list or object containing a 'captures' list",
     )
-    parser.add_argument(
-        "--transport",
-        required=True,
-        choices=("tcp", "serial", "unknown"),
-        help="Must be tcp for the currently evidence-qualified Matrix row",
-    )
+    parser.add_argument("--transport", required=True, choices=("tcp",))
+    parser.add_argument("--pbx-direction", required=True, choices=("rx", "tx"))
     parser.add_argument(
         "--evidence-class",
         required=True,
@@ -65,9 +60,10 @@ def main() -> int:
     args = _parser().parse_args()
     try:
         captures = _load_capture(args.capture)
-        report = analyze_matrix_fias_link_start(
+        report = analyze_matrix_fias_link_progression(
             captures,
             transport=args.transport,
+            pbx_direction=args.pbx_direction,
             evidence_class=args.evidence_class,
         )
     except ValueError as exc:
