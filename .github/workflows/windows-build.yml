@@ -23,6 +23,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact source checkout
+        shell: pwsh
+        run: |
+          $expected = "${{ github.event.pull_request.head.sha || github.sha }}"
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $expected) {
+            throw "Checkout SHA $actual does not match expected exact source SHA $expected"
+          }
+          "EXACT_SOURCE_SHA=$actual" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -84,9 +95,9 @@ jobs:
       - name: Build exact-SHA interop evidence pack
         shell: pwsh
         run: |
-          $evidence = "InnAware-PMS-Interop-Evidence-${{ github.sha }}.json"
+          $evidence = "InnAware-PMS-Interop-Evidence-$env:EXACT_SOURCE_SHA.json"
           $checksum = "$evidence.sha256.txt"
-          python scripts/build-interop-evidence-pack.py --source-sha "${{ github.sha }}" --output $evidence
+          python scripts/build-interop-evidence-pack.py --source-sha "$env:EXACT_SOURCE_SHA" --output $evidence
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -131,13 +142,13 @@ jobs:
               Write-Host "$tag already has a published GitHub release; the tag will not be moved."
             } else {
               $target = (git rev-list -n 1 $tag).Trim()
-              if ($target -ne "${{ github.sha }}") {
+              if ($target -ne "$env:EXACT_SOURCE_SHA") {
                 Write-Host "$tag exists without a release and targets $target; refreshing it to this verified release commit."
                 git tag -d $tag
                 git push origin ":refs/tags/$tag"
                 git config user.name "github-actions[bot]"
                 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-                git tag -a $tag "${{ github.sha }}" -m "InnAware PMS Emulator $tag"
+                git tag -a $tag "$env:EXACT_SOURCE_SHA" -m "InnAware PMS Emulator $tag"
                 git push origin "refs/tags/$tag"
               } else {
                 Write-Host "$tag already targets this verified release commit."
@@ -146,7 +157,7 @@ jobs:
           } else {
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag -a $tag "${{ github.sha }}" -m "InnAware PMS Emulator $tag"
+            git tag -a $tag "$env:EXACT_SOURCE_SHA" -m "InnAware PMS Emulator $tag"
             git push origin "refs/tags/$tag"
           }
 
