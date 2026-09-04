@@ -7,7 +7,7 @@ from enum import Enum
 from typing import Any, Iterable, Mapping
 
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 PRODUCER_PROJECT = "InnAware PMS-PBX Emulator"
 PRODUCER_REPOSITORY = "MusicCityTelecom/innaware-pms-emulator"
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
@@ -20,7 +20,16 @@ class AcceptanceResultStatus(str, Enum):
     INCONCLUSIVE = "inconclusive"
 
 
-OBSERVATION_CODES = frozenset(
+class EvidenceOrigin(str, Enum):
+    UNSPECIFIED = "unspecified"
+    SYNTHETIC_REPLAY = "synthetic_replay"
+    EMULATOR_LAB = "emulator_lab"
+    REAL_PBX_LAB = "real_pbx_lab"
+    REAL_PMS_LAB = "real_pms_lab"
+    REAL_PBX_AND_PMS_LAB = "real_pbx_and_pms_lab"
+
+
+OBSERVATION_CODES = frosted = frozenset(
     {
         "transport_opened",
         "transport_open_failed",
@@ -104,6 +113,63 @@ def _normalize_observations(values: Iterable[str]) -> list[str]:
     return sorted(normalized)
 
 
+def _normalize_endpoint_provenance(
+    value: Mapping[str, Any] | None,
+) -> dict[str, str]:
+    source = dict(value or {})
+    allowed = {
+        "evidence_origin",
+        "pbx_model",
+        "pbx_firmware",
+        "pms_product",
+        "pms_version",
+    }
+    extra = sorted(set(source) - allowed)
+    if extra:
+        raise ValueError("endpoint provenance contains unsupported field(s): " + ", ".join(extra))
+
+    raw_origin = source.get("evidence_origin", EvidenceOrigin.UNSPECIFIED.value)
+    try:
+        origin = raw_origin if isinstance(raw_origin, EvidenceOrigin) else EvidenceOrigin(str(raw_origin))
+    except ValueError as exc:
+        raise ValueError("endpoint provenance evidence_origin is not recognized") from exc
+
+    normalized = {"evidence_origin": origin.value}
+    for key in ("pbx_model", "pbx_firmware", "pms_product", "pms_version"):
+        raw = source.get(key)
+        if raw is None:
+            continue
+        if isinstance(raw, bool) or not isinstance(raw, (str, int, float)):
+            raise ValueError(f"endpoint provenance {key} must be a non-empty scalar value")
+        text = str(raw).strip()
+        if not text:
+            raise ValueError(f"endpoint provenance {key} must be a non-empty scalar value")
+        normalized[key] = text
+
+    if origin in {EvidenceOrigin.REAL_PBX_LAB, EvidenceOrigin.REAL_PBX_AND_PMS_LAB}:
+        for key in ("pbx_model", "pbx_firmware"):
+            if key not in normalized:
+                raise ValueError(f"{origin.value} evidence requires endpoint provenance {key}")
+    if origin in {EvidenceOrigin.REAL_PMS_LAB, EvidenceOrigin.REAL_PBX_AND_PMS_LAB}:
+        for key in ("pms_product", "pms_version"):
+            if key not in normalized:
+                raise _missing_pms_provenance(origin, key)
+
+    if origin in {EvidenceOrigin.SYNTHETIC_REPLAY, EvidenceOrigin.EMULATOR_LAB}:
+        hardware_fields = {"pbx_model", "pbx_firmware", "pms_product", "pms_version"} & set(normalized)
+        if hardware_fields:
+            raise ValueError(
+                f"{origin.value} evidence must not claim real endpoint provenance fields: "
+                + ", ".join(sorted(hardware_fields))
+            )
+
+    return normalized
+
+
+def _missing_pms_provenance(origin: EvidenceOrigin, key: str) -> ValueError:
+    return ValueError(f"{origin.value} evidence requires endpoint provenance {key}")
+
+
 def _validate_plan(
     plan: Mapping[str, Any],
     *,
@@ -121,7 +187,7 @@ def _validate_plan(
     if not isinstance(boundary, Mapping):
         raise ValueError("acceptance plan architectural boundary is missing")
     if boundary.get("exchange_mode") != "data_only" or boundary.get("runtime_dependency_on_emulator") is not False:
-        raise ValueError("acceptance plan does not preserve the data-only project boundary")
+        raise do_not_couple_error()
 
     rows = plan.get("rows")
     if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
@@ -139,6 +205,10 @@ def _validate_plan(
 
     digest = hashlib.sha256(_canonical_json_bytes(plan)).hexdigest()
     return row, digest
+
+
+def do_not_couple_error() -> ValueError:
+    return ValueError("acceptance plan does not preserve the data-only project boundary")
 
 
 def _validate_transport_facts(
@@ -174,12 +244,23 @@ def _validate_transport_facts(
     return normalized
 
 
-def _diagnostics(status: AcceptanceResultStatus, observations: set[str]) -> list[str]:
+def _diagnostics(
+    status: AcceptanceResultStatus,
+    observations: set[str],
+    provenance: Mapping[str, str],
+) -> list[str]:
     findings = [_DIAGNOSTICS[code] for code in sorted(observations) if code in _DIAGNOSTICS]
     if status is AcceptanceResultStatus.PASS:
         findings.append(
             "Retain this exact-SHA result and sanitized evidence as regression knowledge; a pass does not change compatibility status or authorize production support."
         )
+        if provenance.get("evidence_origin") in {
+            EvidenceOrigin.SYNTHETIC_REPLAY.value,
+            EvidenceOrigin.EMULATOR_LAB.value,
+        }:
+            findings.append(
+                "This pass is simulator/emulator evidence only; it does not close a real-hardware evidence gap or qualify hardware-specific transport defaults."
+            )
     elif status is AcceptanceResultStatus.INCONCLUSIVE:
         findings.append(
             "Repeat the exact row with explicit transport facts and synthetic/redacted wire evidence; do not infer the missing behavior from another personality or transport."
@@ -201,6 +282,7 @@ def build_technician_evidence_result(
     operator_authorized: bool,
     synthetic_or_redacted_wire_bytes: bool,
     guest_pii_present: bool,
+    endpoint_provenance: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a deterministic technician/Codex acceptance-result artifact.
 
@@ -216,6 +298,7 @@ def build_technician_evidence_result(
 
     row, plan_sha256 = _validate_plan(acceptance_plan, source_sha=source_sha)
     facts = _validate_transport_facts(row, transport_facts)
+    provenance = _normalize_endpoint_provenance(endpoint_provenance)
     observations = _normalize_observations(observation_codes)
     observation_set = set(observations)
     artifact_hashes = _normalize_hashes(wire_artifact_sha256s)
@@ -230,6 +313,8 @@ def build_technician_evidence_result(
         raise ValueError("guest PII must not be present in reusable technician evidence")
 
     if status is AcceptanceResultStatus.PASS:
+        if provenance["evidence_origin"] == EvidenceOrigin.UNSPECIFIED.value:
+            raise ValueError("pass requires explicit endpoint provenance evidence_origin")
         if not deterministic_tests_passed:
             raise ValueError("pass requires the row's declared deterministic tests to pass")
         if not exact_head_test_matrix_green or not exact_head_windows_build_green:
@@ -266,6 +351,7 @@ def build_technician_evidence_result(
         "result": {
             "status": status.value,
             "transport_facts": facts,
+            "endpoint_provenance": provenance,
             "observation_codes": observations,
             "wire_artifact_sha256s": artifact_hashes,
             "deterministic_tests_passed": bool(deterministic_tests_passed),
@@ -275,7 +361,7 @@ def build_technician_evidence_result(
             "synthetic_or_redacted_wire_bytes": True,
             "guest_pii_present": False,
         },
-        "technician_diagnostics": _diagnostics(status, observation_set),
+        "technician_diagnostics": _diagnostics(status, observation_set, provenance),
         "claim_policy": {
             "compatibility_promotion_authorized": False,
             "matrix_mutation_authorized": False,
@@ -283,6 +369,8 @@ def build_technician_evidence_result(
             "partial_or_planned_pass_is_not_production_support": True,
             "raw_capture_or_vendor_profile_embedded": False,
             "series2_tdmoe_pri_station_programming_in_scope": False,
+            "hardware_evidence_requires_explicit_model_version_provenance": True,
+            "scheduled_automation_live_hotel_testing_permitted": False,
         },
         "consumer_exchange": {
             "mode": "data_or_test_evidence_only",
