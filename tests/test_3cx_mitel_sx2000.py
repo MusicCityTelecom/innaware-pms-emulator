@@ -6,6 +6,13 @@ from pathlib import Path
 
 import pytest
 
+from innaware_pms_emulator.compatibility_matrix import (
+    Direction,
+    EvidenceClass,
+    SupportStatus,
+    find_compatibility,
+)
+from innaware_pms_emulator.compatibility_readiness import readiness_for
 from innaware_pms_emulator.personalities import PERSONALITIES
 from innaware_pms_emulator.profiles import BUILTIN_PROFILES, build_interface_from_profile
 from innaware_pms_emulator.threecx_mitel_diagnostics import analyze_3cx_mitel_sx2000
@@ -58,6 +65,65 @@ def test_3cx_profile_is_pms_side_tcp_client_and_has_no_guessed_port():
     assert config.port == 41000
     assert config.peer_personality_id == "pbx-3cx"
     assert config.effective_emulation_role().value == "pms"
+
+
+def test_3cx_matrix_row_is_direction_and_transport_specific():
+    entry = find_compatibility(
+        pbx_family="3CX",
+        pbx_dialect="Hotel Module / Mitel SX2000-compatible",
+        transport="tcp",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.PMS_TO_PBX,
+    )
+    assert entry.status is SupportStatus.PARTIAL
+    assert entry.evidence_class is EvidenceClass.LEGACY_SOURCE_PROFILE
+    assert entry.deterministic_tests == ("tests/test_3cx_mitel_sx2000.py",)
+    assert "site port is not a protocol constant" in entry.notes
+    assert "3CX remains its own PBX family" in entry.notes
+
+    reverse = find_compatibility(
+        pbx_family="3CX",
+        pbx_dialect="Hotel Module / Mitel SX2000-compatible",
+        transport="tcp",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.PBX_TO_PMS,
+    )
+    assert reverse.status is SupportStatus.UNSUPPORTED
+    assert reverse.evidence_class is EvidenceClass.NONE
+
+    serial = find_compatibility(
+        pbx_family="3CX",
+        pbx_dialect="Hotel Module / Mitel SX2000-compatible",
+        transport="serial",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.PMS_TO_PBX,
+    )
+    assert serial.status is SupportStatus.UNSUPPORTED
+    assert "transport(s): tcp" in serial.notes
+
+
+def test_3cx_readiness_keeps_live_version_and_reverse_direction_open():
+    entry = find_compatibility(
+        pbx_family="3CX",
+        pbx_dialect="Hotel Module / Mitel SX2000-compatible",
+        transport="tcp",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.PMS_TO_PBX,
+    )
+    readiness = readiness_for(entry)
+    codes = {gap.code for gap in readiness.evidence_gaps}
+    assert readiness.release_ready is False
+    assert codes == {
+        "real_3cx_endpoint",
+        "site_endpoint",
+        "pms_record_scope",
+        "tcp_reconnect_scope",
+        "reverse_direction",
+    }
 
 
 def test_source_qualified_pms_transaction_is_bounded_and_payload_safe():

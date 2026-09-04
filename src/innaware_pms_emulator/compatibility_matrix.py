@@ -186,6 +186,20 @@ COMPATIBILITY_MATRIX: tuple[CompatibilityEntry, ...] = (
         notes="Operator-confirmed Matrix SARVAM UCS PBX-to-PMS TCP observation is now preserved as a sanitized STX/ETX-framed FIAS LS fixture. A dedicated Matrix MICROS Opera profile and diagnostics deterministically prevent the known CRLF LS-reply framing mismatch. Link progression, retry timing, site port, ENQ/ACK behavior, guest-event semantics, and broader Matrix models/modes remain unqualified.",
     ),
     CompatibilityEntry(
+        pbx_family="3CX",
+        pbx_dialect="Hotel Module / Mitel SX2000-compatible",
+        transport="tcp",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.PMS_TO_PBX,
+        status=SupportStatus.PARTIAL,
+        evidence_class=EvidenceClass.LEGACY_SOURCE_PROFILE,
+        deterministic_tests=("tests/test_3cx_mitel_sx2000.py",),
+        notes=(
+            "Direct 3CX PMS specification evidence qualifies the Mitel-compatible ENQ/ACK plus STX/application/ETX PMS-to-system transaction, three-second response windows, and up to three frame-only retries after a rejected application frame. Current 3CX Hotel Services documentation separately identifies the Mitel SX2000 integration as a network server that receives messages from the PMS and uses a site-configured address/port, which the Emulator models as a PMS-side TCP client. The exact site port is not a protocol constant. 3CX remains its own PBX family; reusing Mitel-compatible application semantics does not make it a Mitel PBX. Reverse direction, real-version field behavior, TCP reconnect policy, and live endpoint qualification remain incomplete. The Mitel-SX2000 PMS protocol does not carry the separate 3CX billing/CDR interface."
+        ),
+    ),
+    CompatibilityEntry(
         pbx_family="Hitachi",
         pbx_dialect="EPIT-HIT / Epitome Hitachi emulation",
         transport="unknown",

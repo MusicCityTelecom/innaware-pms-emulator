@@ -193,6 +193,35 @@ _EVIDENCE_GAPS: dict[tuple[str, str, str, str, str, str], tuple[EvidenceGap, ...
         ),
     ),
     _key(
+        "3CX",
+        "Hotel Module / Mitel SX2000-compatible",
+        "tcp",
+        "legacy-hotel-pms",
+        "mitel-hospitality",
+        Direction.PMS_TO_PBX,
+    ): (
+        _gap(
+            "real_3cx_endpoint",
+            "Validate a synthetic/redacted PMS-to-3CX transaction against a real 3CX Hotel Services endpoint and record the exact 3CX version/build.",
+        ),
+        _gap(
+            "site_endpoint",
+            "Record the actual Hotel Services address and configured TCP port for the test without promoting that value into a universal 3CX PMS port.",
+        ),
+        _gap(
+            "pms_record_scope",
+            "Capture sanitized CHK/NAM/MW/DND/RST variants against real 3CX before treating the source-derived field set as field-qualified across versions.",
+        ),
+        _gap(
+            "tcp_reconnect_scope",
+            "Characterize 3CX-specific disconnect/reconnect behavior separately from the source-backed Mitel application transaction timing.",
+        ),
+        _gap(
+            "reverse_direction",
+            "Capture 3CX-to-PMS records, including any maid-status behavior, before registering a PBX-to-PMS or bidirectional row.",
+        ),
+    ),
+    _key(
         "Hitachi",
         "EPIT-HIT / Epitome Hitachi emulation",
         "unknown",
