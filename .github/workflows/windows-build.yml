@@ -81,6 +81,18 @@ jobs:
         shell: pwsh
         run: python scripts/build-protocol-pack.py
 
+      - name: Build exact-SHA interop evidence pack
+        shell: pwsh
+        run: |
+          $evidence = "InnAware-PMS-Interop-Evidence-${{ github.sha }}.json"
+          $checksum = "$evidence.sha256.txt"
+          python scripts/build-interop-evidence-pack.py --source-sha "${{ github.sha }}" --output $evidence
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          $digest = (Get-FileHash -Algorithm SHA256 $evidence).Hash.ToLowerInvariant()
+          "$digest  $evidence" | Set-Content -Path $checksum -Encoding ascii
+
       - name: Upload Windows product artifact
         uses: actions/upload-artifact@v4
         with:
@@ -96,6 +108,8 @@ jobs:
             SHA256SUMS-WINDOWS-${{ env.APP_VERSION }}.txt
             InnAware-PMS-Protocol-Pack-*.zip
             InnAware-PMS-Protocol-Pack-*.sha256.txt
+            InnAware-PMS-Interop-Evidence-*.json
+            InnAware-PMS-Interop-Evidence-*.json.sha256.txt
             release-manifest.json
           if-no-files-found: error
           retention-days: 30
@@ -168,4 +182,6 @@ jobs:
             SHA256SUMS-WINDOWS-${{ env.APP_VERSION }}.txt
             InnAware-PMS-Protocol-Pack-*.zip
             InnAware-PMS-Protocol-Pack-*.sha256.txt
+            InnAware-PMS-Interop-Evidence-*.json
+            InnAware-PMS-Interop-Evidence-*.json.sha256.txt
             release-manifest.json
