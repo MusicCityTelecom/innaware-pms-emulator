@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "sanitized": true,
+  "candidate_only": true,
+  "evidence_class": "legacy_source_profile",
+  "description": "Synthetic source-derived 3CX Hotel Module Mitel-SX2000 PBX-to-PMS Maid Status observation. It preserves only the documented STX/ETX STS2 plus station-number shape and contains no guest PII or vendor material.",
+  "combination_candidate": {
+    "pbx_family": "3CX",
+    "pbx_dialect": "Hotel Module / Mitel SX2000-compatible",
+    "transport": "tcp",
+    "pms_family": "legacy-hotel-pms",
+    "pms_protocol": "mitel-hospitality",
+    "direction": "pbx_to_pms"
+  },
+  "sanitization": {
+    "synthetic": true,
+    "guest_pii": false,
+    "vendor_binary": false,
+    "field_layout_scope": "maid_status_only"
+  },
+  "captures": [
+    {"direction": "rx", "hex": "02535453322031303103"}
+  ]
+}
