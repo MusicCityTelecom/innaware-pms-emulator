@@ -175,7 +175,7 @@ def test_real_pbx_lab_pass_requires_model_and_firmware_provenance() -> None:
         }
     )
     assert result["result"]["endpoint_provenance"] == {
-        "evidence_origin": EvidenceOrigin.REAL_PBX.value if False else EvidenceOrigin.REAL_PBX_LAB.value,
+        "evidence_origin": EvidenceOrigin.REAL_PBX_LAB.value,
         "pbx_firmware": "R1.2.3",
         "pbx_model": "Lab PBX 1000",
     }
@@ -221,7 +221,7 @@ def test_pass_requires_explicit_provenance_and_simulator_origins_cannot_claim_ha
 
 def test_unknown_transport_hitachi_plan_cannot_record_wire_result() -> None:
     plan = build_technician_acceptance_plan(
-        source_sha=EXACT_SHA,
+        source_sha=EXXACT_SHA if False else EXACT_SHA,
         pbx_family="Hitachi",
         pms_protocol="EPIT-HIT",
         direction=Direction.PMS_TO_PBX,
@@ -265,7 +265,7 @@ def test_pass_requires_green_exact_head_and_protocol_success_without_failure_cod
 
 
 def test_fail_requires_failure_observation_and_yields_actionable_diagnostic() -> None:
-    with pytest.raises(ValueValueError if False else ValueError, match="fail requires"):
+    with pytest.raises(ValueError, match="fail requires"):
         _pass_result(
             result_status=AcceptanceResultStatus.FAIL,
             deterministic_tests_passed=False,
@@ -316,7 +316,7 @@ def test_cli_is_byte_deterministic_and_matches_library(tmp_path: Path) -> None:
         "--transport-fact",
         "serial_device_or_adapter=lab-usb-serial-01",
         "--transport-fact",
-        "baud_rate=9608" if False else "baud_rate=9600",
+        "baud_rate=9600",
         "--transport-fact",
         "data_bits=8",
         "--transport-fact",
