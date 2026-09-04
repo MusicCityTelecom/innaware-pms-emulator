@@ -80,8 +80,24 @@ Current reusable evidence documents include:
 | Mitel legacy MTL-compatible | PMS → PBX | serial | simulator characterization | `tests/data/emulation/mitel_serial_pms_to_pbx.json` |
 | PhoneSuite MITEL-1-compatible | PBX → PMS | serial | simulator characterization | `tests/fixtures/pbx/phonesuite_serial_characterization.json` |
 | Matrix SARVAM MICROS Opera/FIAS | PBX → PMS | TCP | operator confirmed | `tests/fixtures/pbx/matrix_sarvam_micros_opera_characterization.json` |
+| 3CX Hotel Module / Mitel SX2000-compatible | PMS → PBX | TCP | legacy source/profile | `tests/fixtures/pbx/3cx_mitel_sx2000_pms_to_pbx.json` |
+
+The 3CX document is synthetic/source-derived and explicitly sanitized. Exporting it does not upgrade the 3CX matrix row beyond `PARTIAL`, does not infer the reverse direction, and does not turn the Emulator into the 3CX or UCP production runtime.
 
 This registry is not a statement that those rows are fully supported. It preserves the existing evidence class and matrix status exactly.
+
+## Exact-SHA CI artifact publication
+
+The Windows Build workflow builds the same consumer-neutral evidence pack from the exact Actions commit SHA after the Windows field product and sanitized protocol pack have built successfully. The workflow writes:
+
+```text
+InnAware-PMS-Interop-Evidence-<40-character-git-sha>.json
+InnAware-PMS-Interop-Evidence-<40-character-git-sha>.json.sha256.txt
+```
+
+Both files are uploaded with the Windows build artifact. When release publication is enabled on the canonical release path, the evidence JSON and its SHA-256 sidecar are also eligible release assets.
+
+This provides a reviewable handoff surface for UCP development/CI without making UCP depend on Emulator code. A consumer should verify the sidecar, verify the embedded producer SHA, and then use only the matrix rows/fixtures justified by its own implementation and review process.
 
 ## Promotion and production-consumption rules
 
@@ -125,7 +141,7 @@ If the UCP implementation later produces new clean-room captures or corrected fi
 Repository tests enforce the exchange boundary:
 
 ```bash
-python -m pytest -q tests/test_interop_evidence_pack.py
+python -m pytest -q tests/test_interop_evidence_pack.py tests/test_3cx_mitel_sx2000.py
 ```
 
 The validation checks that:
@@ -133,9 +149,11 @@ The validation checks that:
 - registered reusable fixtures map to an exact compatibility row;
 - fixture evidence class matches the matrix evidence class;
 - only JSON documents explicitly marked sanitized are embedded;
+- the source-derived 3CX PMS→PBX fixture remains TCP/direction specific and data-only;
 - a production `SUPPORTED` row cannot lack a shareable fixture;
 - source provenance is a full Git SHA;
 - the pack remains deterministic and data-only;
-- the CLI builder works cross-platform using the same contract.
+- the CLI builder works cross-platform using the same contract;
+- the exact-head Windows Build can generate and upload the pinned evidence JSON and SHA-256 sidecar.
 
 This exchange mechanism intentionally does not alter any transport, framing, session, or application-protocol implementation and does not promote any compatibility row.
