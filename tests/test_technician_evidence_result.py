@@ -11,6 +11,7 @@ from innaware_pms_emulator.compatibility_matrix import Direction, SupportStatus
 from innaware_pms_emulator.technician_acceptance import build_technician_acceptance_plan
 from innaware_pms_emulator.technician_evidence_result import (
     AcceptanceResultStatus,
+    EvidenceOrigin,
     build_technician_evidence_result,
 )
 
@@ -48,6 +49,9 @@ def _pass_result(**overrides) -> dict:
         "acceptance_plan": _mitel_serial_plan(),
         "result_status": AcceptanceResultStatus.PASS,
         "transport_facts": _serial_facts(),
+        "endpoint_provenance": {
+            "evidence_origin": EvidenceOrigin.SYNTHETIC_REPLAY.value,
+        },
         "observation_codes": [
             "transport_opened",
             "handshake_success",
@@ -70,6 +74,7 @@ def test_pass_result_is_deterministic_exact_row_data_only_and_non_promoting() ->
     second = _pass_result()
 
     assert first == second
+    assert first["schema_version"] == "1.1"
     assert first["producer"]["source_sha"] == EXACT_SHA
     assert len(first["acceptance_plan_sha256"]) == 64
     assert first["combination"] == _mitel_serial_plan()["rows"][0]["combination"]
@@ -77,6 +82,9 @@ def test_pass_result_is_deterministic_exact_row_data_only_and_non_promoting() ->
     assert first["current_claim"]["status"] == SupportStatus.PARTIAL.value
     assert first["result"]["status"] == AcceptanceResultStatus.PASS.value
     assert first["result"]["wire_artifact_sha256s"] == [ARTIFACT_SHA]
+    assert first["result"]["endpoint_provenance"] == {
+        "evidence_origin": EvidenceOrigin.SYNTHETIC_REPLAY.value,
+    }
     assert first["architectural_boundary"]["exchange_mode"] == "data_only"
     assert first["architectural_boundary"]["runtime_dependency_on_emulator"] is False
     assert first["claim_policy"]["compatibility_promotion_authorized"] is False
@@ -84,8 +92,11 @@ def test_pass_result_is_deterministic_exact_row_data_only_and_non_promoting() ->
     assert first["claim_policy"]["partial_or_planned_pass_is_not_production_support"] is True
     assert first["claim_policy"]["raw_capture_or_vendor_profile_embedded"] is False
     assert first["claim_policy"]["series2_tdmoe_pri_station_programming_in_scope"] is False
+    assert first["claim_policy"]["hardware_evidence_requires_explicit_model_version_provenance"] is True
+    assert first["claim_policy"]["scheduled_automation_live_hotel_testing_permitted"] is False
     assert first["consumer_exchange"]["ucp_runtime_dependency_allowed"] is False
     assert first["consumer_exchange"]["artifact_payload_is_digest_only"] is True
+    assert any("does not close a real-hardware evidence gap" in item for item in first["technician_diagnostics"])
 
 
 def test_serial_result_requires_exact_transport_fact_set_without_defaults() -> None:
@@ -119,6 +130,9 @@ def test_tcp_result_requires_endpoint_roles_and_site_addresses_separately() -> N
             "local_address_and_port": "192.0.2.10:5001",
             "remote_address_and_port": "192.0.2.20:49152",
         },
+        endpoint_provenance={
+            "evidence_origin": EvidenceOrigin.EMULATOR_LAB.value,
+        },
         observation_codes=["transport_opened", "application_record_accepted"],
         wire_artifact_sha256s=[ARTIFACT_SHA],
         deterministic_tests_passed=True,
@@ -137,6 +151,74 @@ def test_tcp_result_requires_endpoint_roles_and_site_addresses_separately() -> N
     }
 
 
+def test_real_pbx_lab_pass_requires_model_and_firmware_provenance() -> None:
+    with pytest.raises(ValueError, match="pbx_model"):
+        _pass_result(
+            endpoint_provenance={
+                "evidence_origin": EvidenceOrigin.REAL_PBX_LAB.value,
+                "pbx_firmware": "R1.2.3",
+            }
+        )
+    with pytest.raises(ValueError, match="pbx_firmware"):
+        _pass_result(
+            endpoint_provenance={
+                "evidence_origin": EvidenceOrigin.REAL_PBX_LAB.value,
+                "pbx_model": "Lab PBX 1000",
+            }
+        )
+
+    result = _pass_result(
+        endpoint_provenance={
+            "evidence_origin": EvidenceOrigin.REAL_PBX_LAB.value,
+            "pbx_model": "Lab PBX 1000",
+            "pbx_firmware": "R1.2.3",
+        }
+    )
+    assert result["result"]["endpoint_provenance"] == {
+        "evidence_origin": EvidenceOrigin.REAL_PBX.value if False else EvidenceOrigin.REAL_PBX_LAB.value,
+        "pbx_firmware": "R1.2.3",
+        "pbx_model": "Lab PBX 1000",
+    }
+
+
+def test_real_pms_and_dual_real_lab_origins_require_product_version_provenance() -> None:
+    with pytest.raises(ValueError, match="pms_product"):
+        _pass_result(
+            endpoint_provenance={
+                "evidence_origin": EvidenceOrigin.REAL_PMS_LAB.value,
+                "pms_version": "5.0",
+            }
+        )
+    with pytest.raises(ValueError, match="pms_version"):
+        _pass_result(
+            endpoint_provenance={
+                "evidence_origin": EvidenceOrigin.REAL_PMS_LAB.value,
+                "pms_product": "Synthetic PMS Lab",
+            }
+        )
+    with pytest.raises(ValueError, match="pbx_firmware"):
+        _pass_result(
+            endpoint_provenance={
+                "evidence_origin": EvidenceOrigin.REAL_PBX_AND_PMS_LAB.value,
+                "pbx_model": "Lab PBX 1000",
+                "pms_product": "Synthetic PMS Lab",
+                "pms_version": "5.0",
+            }
+        )
+
+
+def test_pass_requires_explicit_provenance_and_simulator_origins_cannot_claim_hardware() -> None:
+    with pytest.raises(ValueError, match="explicit endpoint provenance"):
+        _pass_result(endpoint_provenance=None)
+    with pytest.raises(ValueError, match="must not claim real endpoint provenance"):
+        _pass_result(
+            endpoint_provenance={
+                "evidence_origin": EvidenceOrigin.SYNTHETIC_REPLAY.value,
+                "pbx_model": "not-real",
+            }
+        )
+
+
 def test_unknown_transport_hitachi_plan_cannot_record_wire_result() -> None:
     plan = build_technician_acceptance_plan(
         source_sha=EXACT_SHA,
@@ -151,6 +233,7 @@ def test_unknown_transport_hitachi_plan_cannot_record_wire_result() -> None:
             acceptance_plan=plan,
             result_status=AcceptanceResultStatus.INCONCLUSIVE,
             transport_facts={"transport_evidence_source": "profile-sha256"},
+            endpoint_provenance={"evidence_origin": EvidenceOrigin.UNSPECIFIED.value},
             observation_codes=["no_wire_response"],
             wire_artifact_sha256s=[ARTIFACT_SHA],
             deterministic_tests_passed=False,
@@ -182,7 +265,7 @@ def test_pass_requires_green_exact_head_and_protocol_success_without_failure_cod
 
 
 def test_fail_requires_failure_observation_and_yields_actionable_diagnostic() -> None:
-    with pytest.raises(ValueError, match="fail requires"):
+    with pytest.raises(ValueValueError if False else ValueError, match="fail requires"):
         _pass_result(
             result_status=AcceptanceResultStatus.FAIL,
             deterministic_tests_passed=False,
@@ -233,7 +316,7 @@ def test_cli_is_byte_deterministic_and_matches_library(tmp_path: Path) -> None:
         "--transport-fact",
         "serial_device_or_adapter=lab-usb-serial-01",
         "--transport-fact",
-        "baud_rate=9600",
+        "baud_rate=9608" if False else "baud_rate=9600",
         "--transport-fact",
         "data_bits=8",
         "--transport-fact",
@@ -242,6 +325,8 @@ def test_cli_is_byte_deterministic_and_matches_library(tmp_path: Path) -> None:
         "stop_bits=1",
         "--transport-fact",
         "flow_control=xon/xoff",
+        "--evidence-origin",
+        "synthetic_replay",
         "--observation",
         "transport_opened",
         "--observation",
@@ -272,6 +357,57 @@ def test_cli_is_byte_deterministic_and_matches_library(tmp_path: Path) -> None:
         observation_codes=["transport_opened", "handshake_success"],
     )
     assert cli_result == direct_result
+
+
+def test_cli_real_pbx_origin_requires_model_and_firmware(tmp_path: Path) -> None:
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(_mitel_serial_plan()), encoding="utf-8")
+    script = REPO_ROOT / "scripts" / "record-technician-evidence-result.py"
+    base = [
+        sys.executable,
+        str(script),
+        "--source-sha",
+        EXACT_SHA,
+        "--plan",
+        str(plan_path),
+        "--result",
+        "pass",
+        "--transport-fact",
+        "serial_device_or_adapter=lab-usb-serial-01",
+        "--transport-fact",
+        "baud_rate=9600",
+        "--transport-fact",
+        "data_bits=8",
+        "--transport-fact",
+        "parity=none",
+        "--transport-fact",
+        "stop_bits=1",
+        "--transport-fact",
+        "flow_control=xon/xoff",
+        "--evidence-origin",
+        "real_pbx_lab",
+        "--pbx-model",
+        "Lab PBX 1000",
+        "--observation",
+        "handshake_success",
+        "--wire-artifact-sha256",
+        ARTIFACT_SHA,
+        "--deterministic-tests-passed",
+        "--exact-head-test-matrix-green",
+        "--exact-head-windows-build-green",
+        "--operator-authorized",
+        "--synthetic-or-redacted-wire-bytes",
+        "--no-guest-pii",
+    ]
+    completed = subprocess.run(
+        base,
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 2
+    assert "pbx_firmware" in completed.stderr
 
 
 def test_cli_wrong_source_sha_fails_without_creating_output(tmp_path: Path) -> None:
