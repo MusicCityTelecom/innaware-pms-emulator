@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "innaware-pms-emulator"
-version = "0.3.7"
+version = "0.4.0"
 description = "Windows-first, cross-platform hotel PMS and call-accounting integration emulator"
 readme = "README.md"
 requires-python = ">=3.11"

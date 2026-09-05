@@ -10,21 +10,23 @@ from innaware_pms_emulator.updates import UpdateManager
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_release_manifest_matches_canonical_versions():
+def test_release_manifest_matches_v040_field_candidate():
     manifest = json.loads((ROOT / "release-manifest.json").read_text(encoding="utf-8"))
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     protocol_pack = json.loads((ROOT / "protocol-pack.json").read_text(encoding="utf-8"))
 
     app_version = project["project"]["version"]
+    assert app_version == "0.4.0"
     assert manifest["schema_version"] == 1
     assert manifest["application_version"] == app_version
     assert manifest["release_tag"] == f"v{app_version}"
+    assert manifest["release_channel"] == "field-beta"
     assert manifest["protocol_pack_version"] == protocol_pack["pack_version"]
     assert manifest["repository"] == "MusicCityTelecom/innaware-pms-emulator"
     assert manifest["update_source"] == "https://github.com/MusicCityTelecom/innaware-pms-emulator/releases"
-    assert manifest["publish"] is True
-    assert manifest["prerelease"] is False
-    assert manifest["make_latest"] is True
+    assert manifest["publish"] is False
+    assert manifest["prerelease"] is True
+    assert manifest["make_latest"] is False
 
 
 def test_cached_status_is_rebound_to_running_version(tmp_path):
