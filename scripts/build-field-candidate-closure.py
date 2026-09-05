@@ -25,6 +25,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Build fail-closed InnAware PMS Emulator field candidate closure manifest")
     parser.add_argument("--source-sha", required=True)
     parser.add_argument("--artifact-manifest", type=Path, required=True)
+    parser.add_argument("--ci-acceptance", type=Path, required=True)
     parser.add_argument("--windows-acceptance", type=Path, required=True)
     parser.add_argument("--ucp-exchange", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -33,12 +34,17 @@ def main() -> int:
     result = build_field_candidate_closure(
         expected_source_sha=args.source_sha,
         artifact_manifest=_load(args.artifact_manifest),
+        ci_acceptance=_load(args.ci_acceptance),
         windows_acceptance=_load(args.windows_acceptance),
         ucp_exchange=_load(args.ucp_exchange),
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps({"closure_ready": result["closure_ready"], "blockers": result["blockers"]}, indent=2))
+    print(json.dumps({
+        "closure_ready": result["closure_ready"],
+        "ci_classification": result["ci_classification"],
+        "blockers": result["blockers"],
+    }, indent=2))
     return 0 if result["closure_ready"] else 2
 
 

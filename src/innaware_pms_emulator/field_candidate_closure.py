@@ -7,6 +7,12 @@ from typing import Any, Mapping
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+_REQUIRED_TEST_MATRIX = {
+    ("ubuntu-latest", "3.11"),
+    ("ubuntu-latest", "3.13"),
+    ("windows-latest", "3.11"),
+    ("windows-latest", "3.13"),
+}
 
 
 def _canonical_sha256(payload: Mapping[str, Any]) -> str:
@@ -26,10 +32,159 @@ def _block(blockers: list[dict[str, str]], code: str, detail: str) -> None:
     blockers.append({"code": code, "detail": detail})
 
 
+def _positive_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _nonnegative_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _classify_ci_acceptance(
+    *,
+    expected_source_sha: str,
+    ci_acceptance: Mapping[str, Any],
+    blockers: list[dict[str, str]],
+) -> str:
+    """Validate exact-head Actions evidence without treating missing execution as PASS."""
+
+    infrastructure_blocked = False
+    functional_failure = False
+
+    ci_source = str(ci_acceptance.get("source_sha", "")).lower()
+    if ci_source != expected_source_sha:
+        _block(
+            blockers,
+            "ci-source-sha-mismatch",
+            f"CI acceptance must be tied to exact Emulator SHA {expected_source_sha}.",
+        )
+        functional_failure = True
+
+    test = ci_acceptance.get("test")
+    if not isinstance(test, Mapping):
+        _block(blockers, "ci-test-infrastructure-blocked", "Test workflow evidence is missing.")
+        infrastructure_blocked = True
+    else:
+        runner_count = test.get("runner_job_count")
+        zero_step_count = test.get("zero_step_job_count")
+        if not _positive_int(runner_count):
+            _block(
+                blockers,
+                "ci-test-infrastructure-blocked",
+                "Test workflow must show at least one actual runner job; no-runner Actions are INFRASTRUCTURE_BLOCKED.",
+            )
+            infrastructure_blocked = True
+        if not _nonnegative_int(zero_step_count) or zero_step_count != 0:
+            _block(
+                blockers,
+                "ci-test-zero-step-infrastructure-blocked",
+                "Test workflow must contain zero zero-step jobs; zero-step Actions are INFRASTRUCTURE_BLOCKED.",
+            )
+            infrastructure_blocked = True
+
+        matrix = test.get("required_matrix")
+        seen: set[tuple[str, str]] = set()
+        if not isinstance(matrix, list):
+            _block(
+                blockers,
+                "ci-test-matrix-infrastructure-blocked",
+                "Test workflow evidence must enumerate the required OS/Python matrix.",
+            )
+            infrastructure_blocked = True
+        else:
+            for item in matrix:
+                if not isinstance(item, Mapping):
+                    continue
+                key = (str(item.get("os", "")), str(item.get("python", "")))
+                if key in _REQUIRED_TEST_MATRIX:
+                    seen.add(key)
+                    if item.get("test_step_executed") is not True:
+                        _block(
+                            blockers,
+                            "ci-test-step-infrastructure-blocked",
+                            f"Required Test step did not execute for {key[0]} / Python {key[1]}.",
+                        )
+                        infrastructure_blocked = True
+                    elif str(item.get("result", "")).lower() != "pass":
+                        _block(
+                            blockers,
+                            "ci-test-matrix-not-pass",
+                            f"Required Test step did not PASS for {key[0]} / Python {key[1]}.",
+                        )
+                        functional_failure = True
+            missing = sorted(_REQUIRED_TEST_MATRIX - seen)
+            if missing:
+                rendered = ", ".join(f"{os_name}/py{python}" for os_name, python in missing)
+                _block(
+                    blockers,
+                    "ci-test-matrix-infrastructure-blocked",
+                    f"Required Test matrix entries are missing: {rendered}.",
+                )
+                infrastructure_blocked = True
+
+        if str(test.get("result", "")).lower() != "pass":
+            _block(blockers, "ci-test-not-pass", "Exact-head Test workflow did not PASS.")
+            functional_failure = True
+
+    windows = ci_acceptance.get("windows_build")
+    if not isinstance(windows, Mapping):
+        _block(blockers, "ci-windows-build-infrastructure-blocked", "Windows Build workflow evidence is missing.")
+        infrastructure_blocked = True
+    else:
+        runner_count = windows.get("runner_job_count")
+        zero_step_count = windows.get("zero_step_job_count")
+        if not _positive_int(runner_count):
+            _block(
+                blockers,
+                "ci-windows-build-infrastructure-blocked",
+                "Windows Build must show at least one actual runner job; no-runner Actions are INFRASTRUCTURE_BLOCKED.",
+            )
+            infrastructure_blocked = True
+        if not _nonnegative_int(zero_step_count) or zero_step_count != 0:
+            _block(
+                blockers,
+                "ci-windows-build-zero-step-infrastructure-blocked",
+                "Windows Build must contain zero zero-step jobs; zero-step Actions are INFRASTRUCTURE_BLOCKED.",
+            )
+            infrastructure_blocked = True
+
+        if str(windows.get("result", "")).lower() != "pass":
+            _block(blockers, "ci-windows-build-not-pass", "Exact-head Windows Build workflow did not PASS.")
+            functional_failure = True
+        if windows.get("exact_source_checkout_verified") is not True:
+            _block(
+                blockers,
+                "ci-windows-exact-source-checkout-required",
+                "Windows Build must execute and pass its exact-source checkout verification.",
+            )
+            functional_failure = True
+        if windows.get("build_step_executed") is not True:
+            _block(
+                blockers,
+                "ci-windows-build-step-infrastructure-blocked",
+                "Windows field-product build step must actually execute.",
+            )
+            infrastructure_blocked = True
+        if windows.get("artifact_upload_executed") is not True:
+            _block(
+                blockers,
+                "ci-windows-artifact-upload-infrastructure-blocked",
+                "Windows artifact-upload step must actually execute.",
+            )
+            infrastructure_blocked = True
+
+    if infrastructure_blocked:
+        return "INFRASTRUCTURE_BLOCKED"
+    if functional_failure:
+        return "FAIL"
+    return "PASS"
+
+
 def build_field_candidate_closure(
     *,
     expected_source_sha: str,
     artifact_manifest: Mapping[str, Any],
+    ci_acceptance: Mapping[str, Any],
     windows_acceptance: Mapping[str, Any],
     ucp_exchange: Mapping[str, Any],
 ) -> dict[str, Any]:
@@ -44,6 +199,12 @@ def build_field_candidate_closure(
     expected = expected_source_sha.lower() if isinstance(expected_source_sha, str) else ""
     if not _valid_git_sha(expected):
         _block(blockers, "invalid-expected-source-sha", "Expected Emulator source SHA must be exactly 40 lowercase hexadecimal characters.")
+
+    ci_classification = _classify_ci_acceptance(
+        expected_source_sha=expected,
+        ci_acceptance=ci_acceptance,
+        blockers=blockers,
+    )
 
     artifact_source = str(artifact_manifest.get("source_sha", "")).lower()
     windows_source = str(windows_acceptance.get("source_sha", "")).lower()
@@ -140,21 +301,24 @@ def build_field_candidate_closure(
 
     closure_ready = not blockers
     return {
-        "schema": "innaware-pms-emulator-field-candidate-closure/v1",
+        "schema": "innaware-pms-emulator-field-candidate-closure/v2",
         "producer": {
             "project": "InnAware PMS-PBX Emulator",
             "source_sha": expected,
         },
         "closure_ready": closure_ready,
+        "ci_classification": ci_classification,
         "blockers": blockers,
         "evidence": {
             "artifact_manifest_sha256": _canonical_sha256(artifact_manifest),
+            "ci_acceptance_sha256": _canonical_sha256(ci_acceptance),
             "windows_acceptance_sha256": _canonical_sha256(windows_acceptance),
             "ucp_exchange_sha256": _canonical_sha256(ucp_exchange),
             "ucp_source_sha": ucp_sha,
             "tested_executable_sha256": accepted_exe_digest,
         },
         "minimum_release_gates": {
+            "exact_head_ci": ci_classification == "PASS",
             "exact_source_artifacts": all(not item["code"].startswith("artifact-") and "source-sha-mismatch" not in item["code"] for item in blockers),
             "native_gui_acceptance": not any(item["code"].startswith("windows-native_gui-") for item in blockers),
             "browser_acceptance": not any(item["code"].startswith("windows-browser-") for item in blockers),
@@ -167,6 +331,7 @@ def build_field_candidate_closure(
             "production_release_authorized": False,
             "production_pms_or_pbx_traffic_authorized": False,
             "server5_use_authorized": False,
+            "no_runner_or_zero_step_actions_can_pass": False,
         },
         "architectural_boundary": {
             "emulator_project": "standalone_support_tool",

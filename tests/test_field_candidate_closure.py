@@ -23,6 +23,33 @@ def artifact_manifest():
     }
 
 
+def ci_acceptance():
+    return {
+        "source_sha": EMU_SHA,
+        "test": {
+            "workflow": "Test",
+            "result": "pass",
+            "runner_job_count": 4,
+            "zero_step_job_count": 0,
+            "required_matrix": [
+                {"os": "ubuntu-latest", "python": "3.11", "result": "pass", "test_step_executed": True},
+                {"os": "ubuntu-latest", "python": "3.13", "result": "pass", "test_step_executed": True},
+                {"os": "windows-latest", "python": "3.11", "result": "pass", "test_step_executed": True},
+                {"os": "windows-latest", "python": "3.13", "result": "pass", "test_step_executed": True},
+            ],
+        },
+        "windows_build": {
+            "workflow": "Windows Build",
+            "result": "pass",
+            "runner_job_count": 1,
+            "zero_step_job_count": 0,
+            "exact_source_checkout_verified": True,
+            "build_step_executed": True,
+            "artifact_upload_executed": True,
+        },
+    }
+
+
 def windows_acceptance():
     return {
         "source_sha": EMU_SHA,
@@ -68,30 +95,32 @@ def ucp_exchange():
     }
 
 
-def test_complete_candidate_evidence_is_ready_without_authorizing_release_or_promotion():
-    result = build_field_candidate_closure(
+def build(*, ci=None, windows=None, exchange=None):
+    return build_field_candidate_closure(
         expected_source_sha=EMU_SHA,
         artifact_manifest=artifact_manifest(),
-        windows_acceptance=windows_acceptance(),
-        ucp_exchange=ucp_exchange(),
+        ci_acceptance=ci_acceptance() if ci is None else ci,
+        windows_acceptance=windows_acceptance() if windows is None else windows,
+        ucp_exchange=ucp_exchange() if exchange is None else exchange,
     )
+
+
+def test_complete_candidate_evidence_is_ready_without_authorizing_release_or_promotion():
+    result = build()
     assert result["closure_ready"] is True
+    assert result["ci_classification"] == "PASS"
     assert result["blockers"] == []
     assert all(result["minimum_release_gates"].values())
     assert result["claim_policy"]["production_release_authorized"] is False
     assert result["claim_policy"]["compatibility_matrix_mutation_authorized"] is False
+    assert result["claim_policy"]["no_runner_or_zero_step_actions_can_pass"] is False
     assert result["architectural_boundary"]["runtime_dependency_between_projects_allowed"] is False
 
 
 def test_wrong_exact_emulator_sha_fails_closed():
     windows = windows_acceptance()
     windows["source_sha"] = "b" * 40
-    result = build_field_candidate_closure(
-        expected_source_sha=EMU_SHA,
-        artifact_manifest=artifact_manifest(),
-        windows_acceptance=windows,
-        ucp_exchange=ucp_exchange(),
-    )
+    result = build(windows=windows)
     codes = {item["code"] for item in result["blockers"]}
     assert result["closure_ready"] is False
     assert "windows-acceptance-source-sha-mismatch" in codes
@@ -101,12 +130,7 @@ def test_windows_evidence_must_match_exact_executable_and_visual_surfaces():
     windows = windows_acceptance()
     windows["executable_sha256"] = "8" * 64
     windows["browser"]["screenshot_sha256"] = ""
-    result = build_field_candidate_closure(
-        expected_source_sha=EMU_SHA,
-        artifact_manifest=artifact_manifest(),
-        windows_acceptance=windows,
-        ucp_exchange=ucp_exchange(),
-    )
+    result = build(windows=windows)
     codes = {item["code"] for item in result["blockers"]}
     assert "windows-executable-hash-mismatch" in codes
     assert "windows-browser-screenshot-hash-invalid" in codes
@@ -116,12 +140,7 @@ def test_production_or_server5_use_is_rejected():
     exchange = ucp_exchange()
     exchange["production_pms_traffic"] = True
     exchange["server5_used"] = True
-    result = build_field_candidate_closure(
-        expected_source_sha=EMU_SHA,
-        artifact_manifest=artifact_manifest(),
-        windows_acceptance=windows_acceptance(),
-        ucp_exchange=exchange,
-    )
+    result = build(exchange=exchange)
     codes = {item["code"] for item in result["blockers"]}
     assert "production-pms-traffic-prohibited" in codes
     assert "ucp-server5-prohibited" in codes
@@ -130,11 +149,58 @@ def test_production_or_server5_use_is_rejected():
 def test_cross_project_runtime_coupling_is_rejected():
     exchange = ucp_exchange()
     exchange["ucp_runtime_dependency_on_emulator"] = True
-    result = build_field_candidate_closure(
-        expected_source_sha=EMU_SHA,
-        artifact_manifest=artifact_manifest(),
-        windows_acceptance=windows_acceptance(),
-        ucp_exchange=exchange,
-    )
+    result = build(exchange=exchange)
     codes = {item["code"] for item in result["blockers"]}
     assert "ucp-runtime-coupling-prohibited" in codes
+
+
+def test_no_runner_test_workflow_is_infrastructure_blocked_never_pass():
+    ci = ci_acceptance()
+    ci["test"]["runner_job_count"] = 0
+    ci["test"]["required_matrix"] = []
+    result = build(ci=ci)
+    assert result["closure_ready"] is False
+    assert result["ci_classification"] == "INFRASTRUCTURE_BLOCKED"
+    assert result["minimum_release_gates"]["exact_head_ci"] is False
+    codes = {item["code"] for item in result["blockers"]}
+    assert "ci-test-infrastructure-blocked" in codes
+    assert "ci-test-matrix-infrastructure-blocked" in codes
+
+
+def test_zero_step_windows_build_is_infrastructure_blocked_never_pass():
+    ci = ci_acceptance()
+    ci["windows_build"]["zero_step_job_count"] = 1
+    result = build(ci=ci)
+    assert result["closure_ready"] is False
+    assert result["ci_classification"] == "INFRASTRUCTURE_BLOCKED"
+    codes = {item["code"] for item in result["blockers"]}
+    assert "ci-windows-build-zero-step-infrastructure-blocked" in codes
+
+
+def test_unexecuted_required_test_step_is_infrastructure_blocked():
+    ci = ci_acceptance()
+    ci["test"]["required_matrix"][2]["test_step_executed"] = False
+    result = build(ci=ci)
+    assert result["ci_classification"] == "INFRASTRUCTURE_BLOCKED"
+    codes = {item["code"] for item in result["blockers"]}
+    assert "ci-test-step-infrastructure-blocked" in codes
+
+
+def test_executed_test_failure_is_fail_not_infrastructure_blocked():
+    ci = ci_acceptance()
+    ci["test"]["result"] = "fail"
+    ci["test"]["required_matrix"][1]["result"] = "fail"
+    result = build(ci=ci)
+    assert result["closure_ready"] is False
+    assert result["ci_classification"] == "FAIL"
+    codes = {item["code"] for item in result["blockers"]}
+    assert "ci-test-not-pass" in codes
+    assert "ci-test-matrix-not-pass" in codes
+
+
+def test_ci_source_mismatch_is_fail_not_pass():
+    ci = ci_acceptance()
+    ci["source_sha"] = "c" * 40
+    result = build(ci=ci)
+    assert result["ci_classification"] == "FAIL"
+    assert "ci-source-sha-mismatch" in {item["code"] for item in result["blockers"]}
