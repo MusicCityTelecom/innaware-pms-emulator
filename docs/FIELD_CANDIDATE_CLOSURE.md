@@ -30,6 +30,28 @@ python scripts/build-field-artifact-manifest.py \
 
 The generated manifest includes SHA-256 and byte size for the hosted artifact bundle, field EXE, installer, Windows ZIP, source ZIP, exact-SHA interop evidence JSON, protocol pack, and release manifest. This step is hash/provenance admission only; it does not execute or visually accept the Windows product.
 
+## Execute the Windows field acceptance
+
+Use `scripts/accept-windows-field-candidate.ps1` on a disposable Windows desktop against the exact EXE admitted by `artifact-manifest.json`. The harness never contacts a production endpoint: both surfaces bind only to `127.0.0.1`, each launch receives its own temporary `INNAWARE_PMS_DATA_DIR`, telemetry and both update checks are disabled before launch, and the harness refuses to emit PASS while an Emulator process remains after shutdown.
+
+The native and browser screenshots are deliberately supplied by the operator/Codex rather than synthesized by the harness. While each surface is live, save a fresh screenshot to the exact path shown by the script. The harness removes any pre-existing file at that path before waiting, requires the replacement screenshot to be non-trivial, hashes it, verifies `/api/v1/health`, `/api/v1/app-info`, and telemetry state, then tears down the exact candidate executable before moving to the next surface.
+
+```powershell
+$emuSha = (git rev-parse HEAD).Trim()
+$manifest = Get-Content .\artifact-manifest.json -Raw | ConvertFrom-Json
+$exeHash = $manifest.artifacts.field_executable.sha256
+
+.\scripts\accept-windows-field-candidate.ps1 `
+  -SourceSha $emuSha `
+  -Exe .\InnAware-PMS-Emulator.exe `
+  -ExpectedExeSha256 $exeHash `
+  -NativeScreenshot C:\Temp\innaware-native.png `
+  -BrowserScreenshot C:\Temp\innaware-browser.png `
+  -Output C:\Temp\windows-acceptance.json
+```
+
+The acceptance operator must visually confirm that both screenshots show the expected InnAware PMS Emulator console before using the emitted JSON in the closure builder. The script proves exact executable identity, local health/product identity, telemetry/update suppression, disposable state, fresh screenshot hashes, and clean Emulator shutdown; it does not convert a visual defect into PASS by inference.
+
 ## Build the closure manifest
 
 ```bash
