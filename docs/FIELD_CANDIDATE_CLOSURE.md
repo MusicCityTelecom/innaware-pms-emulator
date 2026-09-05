@@ -17,6 +17,19 @@ The closure builder requires four JSON inputs:
 
 The UCP side remains a separate production project. The exchange may share wire evidence and fixtures only; neither project may acquire a runtime dependency on the other.
 
+## Build the exact artifact manifest first
+
+Do not hand-transcribe candidate hashes. Build the artifact input directly from the exact hosted Windows artifact ZIP. The builder reads and hashes the archive without executing the EXE or installer, verifies the candidate release remains unpublished/prerelease, verifies the expected 0.4.x release identity carried by the archive, and requires the interoperability evidence producer SHA to equal the exact Emulator SHA.
+
+```bash
+python scripts/build-field-artifact-manifest.py \
+  --source-sha "$EMU_SHA" \
+  --artifact-zip /tmp/innaware-pms-emulator-windows-candidate.zip \
+  --output /tmp/artifact-manifest.json
+```
+
+The generated manifest includes SHA-256 and byte size for the hosted artifact bundle, field EXE, installer, Windows ZIP, source ZIP, exact-SHA interop evidence JSON, protocol pack, and release manifest. This step is hash/provenance admission only; it does not execute or visually accept the Windows product.
+
 ## Build the closure manifest
 
 ```bash
