@@ -1,0 +1,252 @@
+from pathlib import Path
+
+import pytest
+
+from innaware_pms_emulator.compatibility_matrix import (
+    COMPATIBILITY_MATRIX,
+    CompatibilityEntry,
+    Direction,
+    EvidenceClass,
+    SupportStatus,
+    compatibility_catalog,
+    find_compatibility,
+    validate_declared_test_coverage,
+    validate_supported_test_coverage,
+)
+
+
+def test_matrix_keys_are_unique_and_six_dimensional() -> None:
+    keys = [entry.key for entry in COMPATIBILITY_MATRIX]
+    assert len(keys) == len(set(keys))
+    assert all(len(key) == 6 for key in keys)
+
+
+def test_supported_claims_require_tests_and_non_inference_evidence() -> None:
+    for entry in COMPATIBILITY_MATRIX:
+        entry.validate()
+        if entry.status is SupportStatus.SUPPORTED:
+            assert entry.deterministic_tests
+            assert entry.evidence_class not in {EvidenceClass.INFERENCE, EvidenceClass.NONE}
+
+
+def test_supported_claim_rejected_without_deterministic_coverage() -> None:
+    entry = CompatibilityEntry(
+        pbx_family="Example",
+        pbx_dialect="example",
+        transport="tcp",
+        pms_family="Example PMS",
+        pms_protocol="example",
+        direction=Direction.BIDIRECTIONAL,
+        status=SupportStatus.SUPPORTED,
+        evidence_class=EvidenceClass.PACKET_CAPTURE,
+    )
+    with pytest.raises(ValueError, match="deterministic test coverage"):
+        entry.validate()
+
+
+def test_inference_cannot_be_promoted_to_supported() -> None:
+    entry = CompatibilityEntry(
+        pbx_family="Example",
+        pbx_dialect="example",
+        transport="serial",
+        pms_family="Example PMS",
+        pms_protocol="example",
+        direction=Direction.PBX_TO_PMS,
+        status=SupportStatus.SUPPORTED,
+        evidence_class=EvidenceClass.INFERENCE,
+        deterministic_tests=("tests/test_example.py",),
+    )
+    with pytest.raises(ValueError, match="stronger than inference"):
+        entry.validate()
+
+
+def test_unlisted_combination_fails_closed_as_unsupported() -> None:
+    entry = find_compatibility(
+        pbx_family="PhoneSuite",
+        pbx_dialect="unverified-dialect",
+        transport="tcp",
+        pms_family="Oracle / MICROS Opera",
+        pms_protocol="FIAS",
+        direction=Direction.BIDIRECTIONAL,
+    )
+    assert entry.status is SupportStatus.UNSUPPORTED
+    assert entry.evidence_class is EvidenceClass.NONE
+    assert "Do not auto-select" in entry.notes
+
+
+def test_known_mitel_tcp_row_is_partial_capture_backed() -> None:
+    entry = find_compatibility(
+        pbx_family="Mitel",
+        pbx_dialect="MITEL 1 / iPocket-characterized",
+        transport="tcp",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.BIDIRECTIONAL,
+    )
+    assert entry.status is SupportStatus.PARTIAL
+    assert entry.evidence_class is EvidenceClass.PACKET_CAPTURE
+    assert "tests/test_mitel_tcp_session.py" in entry.deterministic_tests
+
+
+def test_mitel_serial_remains_distinct_partial_and_evidence_qualified() -> None:
+    entry = find_compatibility(
+        pbx_family="Mitel",
+        pbx_dialect="legacy MTL-compatible",
+        transport="serial",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.PBX_TO_PMS,
+    )
+    assert entry.status is SupportStatus.PARTIAL
+    assert entry.transport == "serial"
+    assert entry.evidence_class is EvidenceClass.LEGACY_SOURCE_PROFILE
+    assert "TCP capture facts are not promoted to serial truth" in entry.notes
+
+
+def test_mitel_serial_pms_to_pbx_is_separate_simulator_characterized_row() -> None:
+    entry = find_compatibility(
+        pbx_family="Mitel",
+        pbx_dialect="legacy MTL-compatible",
+        transport="serial",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.PMS_TO_PBX,
+    )
+    assert entry.status is SupportStatus.PARTIAL
+    assert entry.transport == "serial"
+    assert entry.evidence_class is EvidenceClass.SIMULATOR_CHARACTERIZATION
+    assert "PMS-originated ENQ" in entry.notes
+    assert "not universal Mitel defaults" in entry.notes
+    assert "no TCP capture fact" in entry.notes
+    assert "tests/test_mitel_serial_session.py" in entry.deterministic_tests
+    assert "tests/test_mitel_serial_pty_integration.py" in entry.deterministic_tests
+
+
+def test_phonesuite_serial_keeps_direction_specific_evidence_rows() -> None:
+    pbx_to_pms = find_compatibility(
+        pbx_family="PhoneSuite",
+        pbx_dialect="MITEL 1-compatible",
+        transport="serial",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.PBX_TO_PMS,
+    )
+    assert pbx_to_pms.status is SupportStatus.PARTIAL
+    assert pbx_to_pms.evidence_class is EvidenceClass.SIMULATOR_CHARACTERIZATION
+    assert "tests/test_phonesuite_serial_pty_integration.py" in pbx_to_pms.deterministic_tests
+    assert "registered separately" in pbx_to_pms.notes
+
+    pms_to_pbx = find_compatibility(
+        pbx_family="PhoneSuite",
+        pbx_dialect="MITEL 1-compatible",
+        transport="serial",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.PMS_TO_PBX,
+    )
+    assert pms_to_pbx.status is SupportStatus.PARTIAL
+    assert pms_to_pbx.evidence_class is EvidenceClass.LEGACY_SOURCE_PROFILE
+    assert "tests/test_phonesuite_pms_policy.py" in pms_to_pbx.deterministic_tests
+    assert "tests/test_phonesuite_pms_source_extensions.py" in pms_to_pbx.deterministic_tests
+    assert "tests/test_phonesuite_capture_diagnostics.py" in pms_to_pbx.deterministic_tests
+    assert "0.100-second" in pms_to_pbx.notes
+    assert "MSG/DID/VIP/WKP" in pms_to_pbx.notes
+    assert "PhoneSuite-to-PMS MSG2" in pms_to_pbx.notes
+    assert "retry policy" in pms_to_pbx.notes
+    assert "Mitel TCP three-second/retry semantics" in pms_to_pbx.notes
+
+    aggregate = find_compatibility(
+        pbx_family="PhoneSuite",
+        pbx_dialect="MITEL 1-compatible",
+        transport="serial",
+        pms_family="legacy-hotel-pms",
+        pms_protocol="mitel-hospitality",
+        direction=Direction.BIDIRECTIONAL,
+    )
+    assert aggregate.status is SupportStatus.UNSUPPORTED
+    assert aggregate.evidence_class is EvidenceClass.NONE
+
+
+@pytest.mark.parametrize(
+    ("dialect", "protocol", "purpose_fragment"),
+    (
+        ("EPIT-HIT / Epitome Hitachi emulation", "EPIT-HIT", "Hitachi-emulation interface"),
+        (
+            "EPIT-HIT2 / Epitome Hitachi room-name layout variant",
+            "EPIT-HIT2",
+            "room and guest-name fields",
+        ),
+    ),
+)
+def test_hitachi_fifth_family_variants_are_evidence_indexed_but_not_wire_claimed(
+    dialect: str,
+    protocol: str,
+    purpose_fragment: str,
+) -> None:
+    entry = find_compatibility(
+        pbx_family="Hitachi",
+        pbx_dialect=dialect,
+        transport="unknown",
+        pms_family="Epitome",
+        pms_protocol=protocol,
+        direction=Direction.PMS_TO_PBX,
+    )
+    assert entry.status is SupportStatus.PLANNED
+    assert entry.evidence_class is EvidenceClass.LEGACY_SOURCE_PROFILE
+    assert entry.deterministic_tests == ()
+    assert purpose_fragment in entry.notes
+    assert "no wire-level compatibility is claimed" in entry.notes
+
+
+@pytest.mark.parametrize("transport", ("serial", "tcp"))
+@pytest.mark.parametrize(
+    ("dialect", "protocol"),
+    (
+        ("EPIT-HIT / Epitome Hitachi emulation", "EPIT-HIT"),
+        ("EPIT-HIT2 / Epitome Hitachi room-name layout variant", "EPIT-HIT2"),
+    ),
+)
+def test_hitachi_transport_guesses_fail_closed(
+    dialect: str,
+    protocol: str,
+    transport: str,
+) -> None:
+    guessed = find_compatibility(
+        pbx_family="Hitachi",
+        pbx_dialect=dialect,
+        transport=transport,
+        pms_family="Epitome",
+        pms_protocol=protocol,
+        direction=Direction.PMS_TO_PBX,
+    )
+    assert guessed.status is SupportStatus.UNSUPPORTED
+    assert guessed.evidence_class is EvidenceClass.NONE
+
+
+def test_catalog_is_structured_for_api_cli_gui_consumers() -> None:
+    catalog = compatibility_catalog()
+    assert catalog
+    assert set(catalog[0]) == {
+        "pbx_family",
+        "pbx_dialect",
+        "transport",
+        "pms_family",
+        "pms_protocol",
+        "direction",
+        "status",
+        "evidence_class",
+        "deterministic_tests",
+        "notes",
+    }
+
+
+def _known_test_paths() -> set[str]:
+    return {str(path).replace("\\", "/") for path in Path("tests").glob("test_*.py")}
+
+
+def test_partial_and_supported_rows_reference_existing_declared_test_files() -> None:
+    assert validate_declared_test_coverage(_known_test_paths()) == []
+
+
+def test_any_supported_rows_reference_existing_test_files() -> None:
+    assert validate_supported_test_coverage(_known_test_paths()) == []

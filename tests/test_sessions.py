@@ -12,6 +12,15 @@ def _available_port() -> int:
         return int(sock.getsockname()[1])
 
 
+async def _wait_for_state(runtime, expected: str, *, timeout: float = 1.0) -> None:
+    """Wait for an asynchronous connection callback without assuming one loop tick."""
+    async def observe() -> None:
+        while runtime.state != expected:
+            await asyncio.sleep(0.001)
+
+    await asyncio.wait_for(observe(), timeout=timeout)
+
+
 def test_tcp_server_stop_closes_clients_and_stays_stopped():
     async def exercise() -> None:
         manager = InterfaceManager()
@@ -25,7 +34,7 @@ def test_tcp_server_stop_closes_clients_and_stays_stopped():
         )
         runtime = await manager.create(config)
         reader, writer = await asyncio.open_connection("127.0.0.1", config.port)
-        await asyncio.sleep(0)
+        await _wait_for_state(runtime, "online")
         assert runtime.state == "online"
 
         await manager.stop(config.name)

@@ -1,0 +1,95 @@
+# PBX↔PMS compatibility claim matrix
+
+`src/innaware_pms_emulator/compatibility_matrix.py` is the machine-readable compatibility claim surface for v0.4.x.
+
+Each row is keyed by all six required dimensions:
+
+`PBX family × PBX dialect × transport × PMS family × PMS protocol × direction`
+
+The matrix is deliberately fail-closed. An exact combination that is not explicitly registered is returned as `unsupported`; the emulator must not silently substitute a nearby personality or transport.
+
+When the only difference from an evidence-indexed row is transport, the failed lookup now explains that boundary instead of returning an opaque generic failure. If the known row itself has `transport=unknown` (for example the current Hitachi/Epitome lineage), a requested serial or TCP transport remains `unsupported` and is explicitly identified as evidence-unqualified. If evidence exists only on another concrete transport, the diagnostic names that transport and warns not to transpose framing, timing, handshake, or application behavior. These messages are technician guidance only; they do not create a new compatibility row or promote evidence.
+
+## Status rules
+
+- `supported`: may be used only when the exact row has deterministic test/fixture coverage and evidence stronger than inference.
+- `partial`: meaningful implementation and evidence exist, but one or more runtime, fixture, direction, transport, or model-specific boundaries remain open.
+- `planned`: evidence or product need identifies the combination, but implementation/coverage is not yet sufficient.
+- `unsupported`: no verified exact row exists. This is the default for an unlisted combination.
+
+The current registry intentionally does **not** promote any v0.4.0 row to `supported` merely because software coverage exists. Evidence maturity and the exact transport/model boundary remain part of the claim.
+
+## Current row boundaries
+
+### Mitel TCP
+
+Mitel `MITEL 1 / iPocket-characterized` over TCP remains `partial` and packet-capture-backed. Deterministic tests cover stream replay, session state, live TCP runtime behavior, and outbound transaction handling. Capture observations remain qualified to the characterized product/profile and are not promoted into universal Mitel behavior.
+
+### Mitel serial
+
+Mitel `legacy MTL-compatible` serial remains **distinct from Mitel TCP and is now explicitly direction-indexed** rather than relying on one serial row to imply both directions.
+
+`Mitel × legacy MTL-compatible × serial × legacy-hotel-pms × mitel-hospitality × PBX_TO_PMS` remains `partial / legacy_source_profile`. The legacy-profile lineage has a separate serial state machine, live pyserial routing, Linux POSIX PTY framing/reopen coverage, and outbound ENQ/ACK/NAK transaction tests. Real-PBX model coverage and broader timing evidence remain incomplete. TCP capture facts are not used as proof of serial behavior.
+
+`Mitel × legacy MTL-compatible × serial × legacy-hotel-pms × mitel-hospitality × PMS_TO_PBX` is separately registered as `partial / simulator_characterization`. A clean-room serial PBX simulator explicitly observed PMS-originated `ENQ -> ACK`, followed by `STX CHK1/CHK0 ETX -> ACK`. Independent serial session/runtime/PTY tests preserve the same receive-side boundary, including fragmented/coalesced reads, ENQ gating, ACK/NAK routing, close/reopen state reset, and serial-only runtime selection.
+
+The simulator observation used an explicit lab serial configuration, but that configuration is characterization data rather than a universal Mitel serial default. Legacy deployments and profiles can use different baud settings. Likewise, public Mitel application-protocol material that documents a three-second ACK window and bounded record retries does not itself identify a physical transport, so those application timing facts are not used to manufacture serial transport evidence. The TCP packet capture remains a separate evidence row.
+
+An aggregate serial `BIDIRECTIONAL` row is intentionally absent. Consumers must query the exact direction so legacy-profile provenance and clean-room simulator provenance remain visible instead of being silently collapsed into one stronger claim.
+
+### PhoneSuite serial
+
+PhoneSuite serial now has **separate directional rows** instead of an aggregate bidirectional claim, because the available evidence has different provenance in each direction.
+
+`PhoneSuite × MITEL 1-compatible × serial × legacy-hotel-pms × mitel-hospitality × PBX_TO_PMS` remains `partial / simulator_characterization`. Its clean-room fixture, dedicated session adapter, live serial selector, and Linux POSIX PTY tests cover characterized ENQ/ACK plus STX/ETX `CHK0`, `CHK1`, and `NAM2` behavior, fragmented/coalesced reads, close/reopen reset, and peer ACK/NAK control routing.
+
+`PhoneSuite × MITEL 1-compatible × serial × legacy-hotel-pms × mitel-hospitality × PMS_TO_PBX` is separately registered as `partial / legacy_source_profile`. Historical PhoneSuite/Voiceware PMS-interface documentation explicitly states that either PhoneSuite or the PMS can be the sender for the ENQ/ACK/STX-message-ETX exchange. The source-backed PMS-originated application subset includes `CHK0`/`CHK1`, `LMT`, `DND0`/`DND1`, `GRP`, `LNG`, `MW 0`/`MW 1`, `RSTn`, `AREYUTHERE`, database-dump boundary controls `GRS`/`END`, and guest-name commands `NAM1` through `NAM4`. Direct PhoneSuite PMS-interface manual evidence additionally resolves PMS→PhoneSuite application forms for `MSGn EEE[E]` (`n=0..9`), `DID1 EEE[E] DDDD` / `DID0 EEE[E]`, `VIP1/0 EEE[E]`, and wakeup commands `WKPhhmm EEE[E]`, `WKP9999 EEE[E]`, or `WKP EEE[E]` for clear. `phonesuite_pms_policy.py` retains the earlier conservative policy while `phonesuite_pms_source_extensions.py` models these directly documented extensions. `MOV`, `STSn`, and `RQINZ` remain outside this PMS→PBX qualification boundary under current evidence.
+
+`MSG` is explicitly direction-sensitive rather than globally promoted. The direct manual separately documents a PhoneSuite→PMS `MSG2` voicemail-status record with a different shape and meaning. Therefore the PMS-originated `MSGn EEE[E]` diagnostic may run only when endpoint identity independently proves PMS→PBX direction. A shared `MSG` prefix is not evidence that the two directions use the same application record.
+
+The same documentation qualifies PhoneSuite's receive-side timing: after PhoneSuite ACKs a PMS ENQ, STX must arrive within **0.100 second**; between-character delay greater than **0.100 second** times out the transaction; ETX must terminate the message inside that receive window; and late non-ENQ data after the timed-out transaction is answered with NAK. `phonesuite_pms_policy.py` preserves these facts as deterministic technician diagnostics rather than importing the Mitel-compatible three-second timer or Mitel frame-only retry count.
+
+Deterministic application-format diagnostics validate only source-backed syntax boundaries. The base policy covers CHK extension/name shape, LMT amount shape, DND status, GRP field width/content, lowercase two-letter `LNG` language coding, exact `MW` status spacing, `RSTn`, `NAM1`-`NAM4` index/name placement, and argument-free `AREYUTHERE`/`GRS`/`END`. The direct-manual extension layer validates PMS-originated MSG index/extension shape, DID set/clear status plus the documented four-digit `DDDD` assignment field, VIP set/clear status, and zero-padded 24-hour WKP time/clear forms. Format findings do not assert that a syntactically valid extension exists in a property's inventory. DID `DDDD` is treated only as the documented four-digit legacy application field and is not generalized into a public E.164 DID format. These diagnostics do not promote row status or evidence class and never infer transport settings.
+
+PhoneSuite-specific baud/data/parity/stop/flow defaults are still **not** claimed. Voiceware setup documentation allows serial and TCP/IP methods and gives general serial configuration guidance, while the existing serial characterization/runtime proves the emulator's serial path. Those facts do not establish a universal PhoneSuite serial parameter set. The PhoneSuite PBX-interface documentation says the application text may carry an optional checksum, but the currently indexed section does not qualify a PhoneSuite checksum algorithm/placement contract strongly enough to implement one here. Retry policy also remains unqualified. Linux PTY validation is test infrastructure, not a new protocol-evidence class. Series2/Voiceware TDMoE, PRI, Q.921/Q.931, D-channel, or `0x0E` station-programming observations must not be treated as PhoneSuite PBX↔PMS serial/application evidence.
+
+An aggregate `BIDIRECTIONAL` PhoneSuite row intentionally remains absent. Consumers must query the exact direction so the simulator-characterized PBX→PMS evidence is not silently promoted to the stronger legacy-source class used for the PMS→PBX subset.
+
+### Matrix FIAS
+
+Matrix `MICROS Opera / FIAS` over TCP remains `partial` based on operator-confirmed field behavior. A dedicated sanitized Matrix SARVAM fixture, profile, and deterministic diagnostic tests now preserve the observed PBX→PMS STX/ETX-framed `LS` behavior and the known CRLF-reply framing failure. Matrix-specific post-`LS` progression, retry timing, site port, ENQ/ACK behavior, guest-event semantics, PMS→PBX application direction, and broader Matrix modes/models remain unqualified. Generic FIAS `LD`/`LR`/`LA` knowledge must not be promoted into Matrix-specific truth without Matrix evidence.
+
+### Fifth PBX family: Hitachi / Epitome
+
+Hitachi is evidence-indexed rather than an evidence-free placeholder. Legacy PhoneSuite/Voiceware documentation explicitly identifies two Epitome-to-Hitachi profile variants:
+
+- `Hitachi × EPIT-HIT / Epitome Hitachi emulation × unknown transport × Epitome × EPIT-HIT × PMS_TO_PBX = planned / legacy_source_profile`
+- `Hitachi × EPIT-HIT2 / Epitome Hitachi room-name layout variant × unknown transport × Epitome × EPIT-HIT2 × PMS_TO_PBX = planned / legacy_source_profile`
+
+`EPIT-HIT` is documented as the default Epitome Hitachi-emulation interface used in Navy NGIS/Navy Lodge deployments. `EPIT-HIT2` is separately documented as the variant to use when normal check-ins fail because the room number and guest name do not appear where expected. Keeping these as separate matrix rows matters because `EPIT-HIT2` is an evidence-backed dialect/profile choice rather than an informal note attached to `EPIT-HIT`.
+
+Both rows deliberately retain `transport=unknown`. The general Voiceware setup material discusses serial PBX-interface configuration, but the available `EPIT-HIT`/`EPIT-HIT2` descriptions do not themselves bind either profile to a transport or serial settings. Neither row therefore qualifies framing, control bytes, baud/data/parity/stop values, byte-level record layout, checksum/BCC, or reverse-direction behavior. Guessed `serial` and `tcp` combinations fail closed as `unsupported`. Those transport-only near misses now produce an actionable explanation that the Hitachi lineage is real but the selected transport is not yet evidence-qualified.
+
+## Evidence ranking
+
+Rows use the project evidence order:
+
+1. packet capture
+2. operator-confirmed behavior
+3. legacy source/profile
+4. simulator characterization
+5. inference
+
+Inference alone can never satisfy a `supported` claim. Test harnesses such as loopback sockets and POSIX PTYs validate implementation behavior but do not upgrade the underlying protocol evidence class.
+
+## Test contract
+
+A `supported` row must list deterministic test paths. Unit tests enforce this contract and also verify that unknown combinations fail closed. This makes the compatibility matrix suitable for later CLI/API/GUI presentation without turning auto-detection into auto-configuration.
+
+`partial` rows also declare the deterministic tests that exercise their implemented behavior. The matrix audit now verifies that every test path declared by a `partial` or `supported` row actually exists in the current checkout, preventing stale documentation/claim references from surviving a rename or refactor. This existence check does not promote evidence or make a partial row supported.
+
+For `planned` evidence-indexed rows such as Hitachi/Epitome, deterministic tests may validate the claim boundary itself while wire-level tests remain absent. The absence of a wire fixture must remain visible and must not be converted into an inferred transport or framing choice.
+
+## Live/Codex acceptance rule
+
+Runtime or field observations may tighten a row only when the result records the exact tested Git SHA, configured personality, application protocol, transport, direction, serial/TCP settings, synthetic test operation, and observed wire/control behavior. A result from an unspecified or older SHA is not sufficient to promote the current branch. Vendor binaries, credentials, customer/property identifiers, and real guest data must not be committed with the evidence.

@@ -1,0 +1,29 @@
+{
+  "fixture_id": "phonesuite-serial-cleanroom-v1",
+  "pbx_family": "PhoneSuite",
+  "pbx_dialect": "MITEL 1-compatible",
+  "transport": "serial",
+  "status": "partially_characterized",
+  "sanitized": true,
+  "evidence_class": "simulator_characterization",
+  "evidence_scope": [
+    "PhoneSuite simulator/reference evidence supports ENQ/ACK session control.",
+    "PhoneSuite simulator/reference evidence supports STX/ETX framing around CHK/NAM-family records.",
+    "This fixture does not assert Series2 TDMoE, PRI, Q.921/Q.931, or 0x0E station-programming behavior as PMS protocol behavior.",
+    "Serial baud/data/parity/stop settings are intentionally unspecified until PhoneSuite-specific evidence is qualified."
+  ],
+  "sequence": [
+    {"direction": "pbx_to_emulator", "hex": "05", "meaning": "ENQ"},
+    {"direction": "emulator_to_pbx", "hex": "06", "meaning": "ACK"},
+    {"direction": "pbx_to_emulator", "hex": "02 43 48 4b 31 52 4f 4f 4d 31 30 31 03", "meaning": "STX + CHK1ROOM101 + ETX"},
+    {"direction": "emulator_to_pbx", "hex": "06", "meaning": "ACK"},
+    {"direction": "pbx_to_emulator", "hex": "05", "meaning": "ENQ"},
+    {"direction": "emulator_to_pbx", "hex": "06", "meaning": "ACK"},
+    {"direction": "pbx_to_emulator", "hex": "02 4e 41 4d 32 54 45 53 54 2c 47 55 45 53 54 52 4f 4f 4d 31 30 31 03", "meaning": "STX + NAM2TEST,GUESTROOM101 + ETX"},
+    {"direction": "emulator_to_pbx", "hex": "06", "meaning": "ACK"},
+    {"direction": "pbx_to_emulator", "hex": "05", "meaning": "ENQ"},
+    {"direction": "emulator_to_pbx", "hex": "06", "meaning": "ACK"},
+    {"direction": "pbx_to_emulator", "hex": "02 43 48 4b 30 52 4f 4f 4d 31 30 31 03", "meaning": "STX + CHK0ROOM101 + ETX"},
+    {"direction": "emulator_to_pbx", "hex": "06", "meaning": "ACK"}
+  ]
+}

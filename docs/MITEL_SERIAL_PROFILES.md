@@ -4,33 +4,35 @@ InnAware PMS Emulator exposes the two related serial hotel PMS compatibility pro
 
 These names are descriptive interoperability identifiers only. They do not imply sponsorship, certification, partnership, or endorsement by Mitel.
 
-## Shared serial defaults
+## Built-in serial preset versus protocol evidence
 
-The built-in technician profiles use the field-tested legacy defaults below. They can be overridden when the system being tested requires different serial settings.
+The built-in technician profiles start with the legacy emulator/profile preset below. These values are convenient defaults, **not a claim that every Mitel-family PBX uses the same physical serial settings**.
 
 - Transport: Serial / COM port
-- Baud: 1200
-- Data bits: 8
-- Parity: None
-- Stop bits: 1
-- Flow control: XON/XOFF
+- Baud preset: 1200
+- Data bits preset: 8
+- Parity preset: None
+- Stop bits preset: 1
+- Flow-control preset: XON/XOFF
 - Record framing: STX / ETX
-- ACK timeout: 3 seconds
-- Bounded retries: 3
 
-The serial device is intentionally left unset in the profile. The technician must select the actual Windows COM port or Linux serial device before starting the interface.
+The serial device is intentionally left unset in the profile. The technician must select the actual Windows COM port or Linux serial device and verify the PBX/site serial parameters before starting the interface.
 
-## Transaction behavior
+A separate clean-room serial characterization used 9600 8N1 XON/XOFF while exercising PMS-originated ENQ/ACK plus CHK transactions. That observation is useful evidence that the application personality can appear over serial, but it also demonstrates why one observed baud rate must not be generalized into universal transport truth. Site/profile serial settings remain independently configurable.
 
-Outbound PMS events use the half-duplex transaction sequence:
+## Application transaction behavior
+
+The Mitel-family application transaction model uses the half-duplex sequence:
 
 ```text
 ENQ -> ACK -> STX + record + ETX -> ACK
 ```
 
-If the initial ENQ is NAKed or times out, the ENQ phase is retried within the configured bound. Once ENQ has been acknowledged, a NAK or timeout on the record retries the framed record without unnecessarily starting a second ENQ handshake.
+The emulator's transaction preset uses a 3-second ACK timeout and three bounded record retries. Public Mitel application-protocol material documents the same three-second response window and permits three frame-only retries after ENQ has already been acknowledged, but that application specification does **not** itself identify a physical transport. Therefore timeout/retry semantics and serial electrical/port parameters remain separate evidence dimensions.
 
-Inbound ENQ and framed records can be acknowledged automatically when `auto_ack` is enabled.
+If the initial ENQ is NAKed or times out, the emulator's configured transaction policy may retry the ENQ phase within its configured bound. Once ENQ has been acknowledged, a NAK or timeout on the record can retry the framed record without unnecessarily starting a second ENQ handshake.
+
+Inbound ENQ and framed records can be acknowledged automatically when `auto_ack` is enabled. The six-dimensional compatibility matrix keeps PBX→PMS and PMS→PBX serial evidence as separate rows rather than converting these implementation capabilities into an aggregate bidirectional claim.
 
 ## Mitel 1
 

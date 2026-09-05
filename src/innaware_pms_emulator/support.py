@@ -103,6 +103,7 @@ def build_support_bundle(
     serial_ports: list[dict[str, Any]],
     captures_by_interface: dict[str, list[dict[str, Any]]],
     transactions_by_interface: dict[str, list[dict[str, Any]]],
+    diagnostics_by_interface: dict[str, list[dict[str, Any]]] | None = None,
     full_property_state: list[dict[str, Any]] | None = None,
 ) -> bytes:
     stream = io.BytesIO()
@@ -120,6 +121,8 @@ def build_support_bundle(
             archive.writestr(f"captures/{base}.csv", captures_as_csv(captures))
         for name, transactions in transactions_by_interface.items():
             archive.writestr(f"transactions/{safe_name(name)}.json", _json_bytes(transactions))
+        for name, diagnostics in (diagnostics_by_interface or {}).items():
+            archive.writestr(f"diagnostics/{safe_name(name)}.json", _json_bytes(diagnostics))
 
         if full_property_state is not None:
             archive.writestr("properties/FULL_PROPERTY_STATE_CONTAINS_GUEST_DATA.json", _json_bytes(full_property_state))
@@ -137,7 +140,7 @@ def build_support_bundle(
             "README.txt",
             (
                 "InnAware PMS Emulator support bundle\n\n"
-                "This archive is intended for troubleshooting. Interface addresses, serial-port identifiers, and wire captures may contain environment-specific data.\n"
+                "This archive is intended for troubleshooting. Interface addresses, serial-port identifiers, diagnostics, and wire captures may contain environment-specific data.\n"
                 "Full guest/property state is excluded by default.\n"
             ),
         )
