@@ -30,7 +30,7 @@ class OwnedTcpListener:
                     sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
                 sock.setblocking(False)
                 sock.bind(address)
-                sock.listen(socket.SOMAXCONN)
+                sock.listen(100)  # Preserve asyncio.start_server's default backlog.
             listener._tasks = [
                 asyncio.create_task(listener._accept(sock, connected))
                 for sock in listener.sockets
