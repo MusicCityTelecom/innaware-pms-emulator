@@ -16,6 +16,7 @@ from .phonesuite_serial_session import PhoneSuiteSerialSessionStateMachine
 from .property_state import property_manager
 from .state import CallAccountingStateMachine, EngineAction, FiasStateMachine
 from .transactions import CallAccountingTransactionSender, MitelTransactionSender
+from .tcp_listener import OwnedTcpListener
 
 
 _TRANSACTIONAL_CA_PROTOCOLS = {"INNFORM_XL", "HOBIS", "HOBIS_A", "HOLIDEX"}
@@ -49,7 +50,7 @@ class InterfaceRuntime:
     config: InterfaceConfig
     state: str = "stopped"
     last_error: str | None = None
-    server: asyncio.AbstractServer | None = None
+    server: OwnedTcpListener | None = None
     task: asyncio.Task | None = None
     reader: asyncio.StreamReader | None = None
     writer: asyncio.StreamWriter | None = None
@@ -193,9 +194,10 @@ class InterfaceManager:
         runtime = self.get(name)
         runtime.stopping = True
         if runtime.server:
-            runtime.server.close()
+            server = runtime.server
+            server.close()
             runtime.server = None
-            await asyncio.sleep(0)
+            await server.wait_closed()
         if runtime.task:
             runtime.task.cancel()
             try:
@@ -399,7 +401,7 @@ class InterfaceManager:
                     runtime.peer = None
                     runtime.state = "listening"
 
-        runtime.server = await asyncio.start_server(
+        runtime.server = await OwnedTcpListener.start(
             connected,
             host=runtime.config.bind_host,
             port=runtime.config.port,

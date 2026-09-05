@@ -15,6 +15,7 @@ def test_selector_stop_during_accepted_transport_registration():
         trace = []
         original_factory = loop.get_task_factory()
         original_handler = loop.get_exception_handler()
+        original_connect = loop.connect_accepted_socket
 
         async def deferred(coro):
             trace.append("accepted-before-transport")
@@ -27,7 +28,14 @@ def test_selector_stop_during_accepted_transport_registration():
                 coro = deferred(coro)
             return asyncio.Task(coro, loop=loop, **kwargs)
 
+        async def delayed_connect(*args, **kwargs):
+            trace.append("accepted-before-transport")
+            queued.set()
+            await release.wait()
+            return await original_connect(*args, **kwargs)
+
         loop.set_task_factory(factory)
+        loop.connect_accepted_socket = delayed_connect
         loop.set_exception_handler(lambda _loop, context: errors.append(type(context.get("exception")).__name__))
         manager = InterfaceManager()
         with socket.socket() as available:
@@ -60,6 +68,7 @@ def test_selector_stop_during_accepted_transport_registration():
                 await writer.wait_closed()
             loop.set_task_factory(original_factory)
             loop.set_exception_handler(original_handler)
+            loop.connect_accepted_socket = original_connect
 
     with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
         runner.run(exercise())
