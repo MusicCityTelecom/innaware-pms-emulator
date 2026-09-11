@@ -37,6 +37,31 @@ BUILTIN_PROFILES: dict[str, InterfaceProfile] = {
         },
         notes=["Use STX/ETX only when the target FIAS profile specifically requires it."],
     ),
+    "matrix-micros-opera-fias-tcp-server": InterfaceProfile(
+        id="matrix-micros-opera-fias-tcp-server",
+        name="Matrix MICROS Opera FIAS - TCP Server",
+        purpose="pms",
+        protocol="FIAS",
+        maturity="field-observed",
+        description=(
+            "Matrix SARVAM UCS MICROS Opera interoperability profile using FIAS application records "
+            "with the field-observed STX/ETX wire framing. Matrix was observed initiating the TCP "
+            "connection toward the PMS endpoint."
+        ),
+        defaults={
+            "transport": "tcp_server",
+            "bind_host": "0.0.0.0",
+            "port": 5001,
+            "peer_personality_id": "pbx-matrix",
+            "emulation_role": "pms",
+            "options": {"framing": "stx_etx", "role": "pms"},
+        },
+        notes=[
+            "Port 5001 is InnAware's lab default, not a Matrix vendor default; override it to match the site configuration.",
+            "No ENQ/ACK behavior is enabled because it is not part of the qualified Matrix MICROS Opera observation.",
+            "TCP connected is not protocol active; inbound LS starts FIAS link negotiation and guest traffic should wait for link progression.",
+        ],
+    ),
     "hilton-pep-fias-tcp-server": InterfaceProfile(
         id="hilton-pep-fias-tcp-server",
         name="Hilton / PEP FIAS - TCP Server",
@@ -73,6 +98,41 @@ BUILTIN_PROFILES: dict[str, InterfaceProfile] = {
             },
         },
         notes=["Keep this separate from CRLF FIAS and Hilton/PEP FIAS profiles."],
+    ),
+    "3cx-mitel-sx2000-tcp-client": InterfaceProfile(
+        id="3cx-mitel-sx2000-tcp-client",
+        name="3CX Hotel Module - Mitel SX2000 PMS TCP Client",
+        purpose="pms",
+        protocol="Mitel 1",
+        maturity="source-backed",
+        description=(
+            "PMS-side TCP client for the documented 3CX Hotel Services Mitel SX2000-compatible integration. "
+            "3CX acts as the server; the Emulator connects as the PMS and uses the source-backed Mitel-compatible half-duplex application transaction."
+        ),
+        defaults={
+            "transport": "tcp_client",
+            "host": None,
+            "port": None,
+            "peer_personality_id": "pbx-3cx",
+            "emulation_role": "pms",
+            "options": {
+                "framing": "stx_etx",
+                "transaction_framing": "stx_etx",
+                "transactional_enq_ack": True,
+                "auto_ack": False,
+                "strict_half_duplex": True,
+                "ack_timeout": 3.0,
+                "max_attempts": 1,
+                "max_record_retries": 3,
+            },
+        },
+        notes=[
+            "Enter the 3CX Hotel Services endpoint and the exact site-configured port before starting; no universal 3CX PMS port is claimed.",
+            "The three-second ACK/NAK window and three frame-only retries are application/session facts from the 3CX Mitel-compatible PMS specification.",
+            "ENQ acquisition retry count is not source-qualified for this 3CX profile, so the built-in profile performs one ENQ acquisition attempt rather than inventing a retry policy.",
+            "Automatic ACK of 3CX-originated PMS application traffic is disabled because the reverse PBX-to-PMS direction remains separately evidence-qualified.",
+            "Do not use this profile for the separate 3CX Fidelio/FIAS integration or for CDR/billing transport.",
+        ],
     ),
     "mitel-1-serial": InterfaceProfile(
         id="mitel-1-serial",

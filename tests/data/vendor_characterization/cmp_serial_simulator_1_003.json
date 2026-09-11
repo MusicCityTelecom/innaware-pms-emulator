@@ -1,0 +1,27 @@
+{
+  "application": "CMP Serial Simulator",
+  "ui_version": "1.003",
+  "file_version": "1.1.3944.17442",
+  "evidence": "emulator-observed",
+  "sanitized": true,
+  "phonesuite_attribution": "unknown",
+  "modes": ["Ack-Nak Receiver", "PMS Sender", "HOBIS A Sender"],
+  "not_exposed": ["Mitel 1", "Mitel 2", "Voiceware", "OperaIP", "FIAS", "PhoneSuite profile"],
+  "serial_defaults": {
+    "baud": 1200,
+    "data_bits": 8,
+    "parity": "N",
+    "stop_bits": 1,
+    "flow_control": "not_exposed"
+  },
+  "pms_sender": {
+    "message_source": "free_form_text",
+    "default_payload_text": "CHK1  101 LASTNAME,FIRSTNAME",
+    "wire_hex": "05 | 02 43 48 4b 31 20 20 31 30 31 20 4c 41 53 54 4e 41 4d 45 2c 46 49 52 53 54 4e 41 4d 45 03",
+    "sequence": ["ENQ", "ACK", "STX_RECORD_ETX", "ACK"],
+    "ack_to_record_delay_seconds_observed": 0.505,
+    "record_contains_crlf": false,
+    "bcc_default": false,
+    "optional_ui_flags": ["Include Checksum", "Hitachi Fmt"]
+  }
+}

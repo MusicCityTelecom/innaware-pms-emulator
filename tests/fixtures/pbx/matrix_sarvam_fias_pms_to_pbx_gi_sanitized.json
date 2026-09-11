@@ -1,0 +1,16 @@
+{
+  "sanitized": true,
+  "synthetic": true,
+  "evidence_class": "operator_confirmed",
+  "evidence": "Synthetic/redacted reproduction of one historical operator-confirmed Matrix SARVAM UCS MICROS Opera/FIAS PMS-originated GI followed by PBX ACK. The historical runtime log is retained outside Git because it contains guest data and is not tied to the current Emulator exact SHA.",
+  "captures": [
+    {
+      "direction": "tx",
+      "hex": "02 47 49 7c 52 4e 39 30 30 7c 47 23 30 30 30 31 7c 47 4e 52 45 44 41 43 54 45 44 7c 47 4c 45 4e 7c 47 56 4e 7c 43 53 31 7c 47 41 30 30 30 31 30 31 7c 47 44 30 30 30 31 30 32 7c 47 53 4e 7c 03"
+    },
+    {
+      "direction": "rx",
+      "hex": "06"
+    }
+  ]
+}

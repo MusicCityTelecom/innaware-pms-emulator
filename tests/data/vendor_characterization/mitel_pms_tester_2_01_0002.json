@@ -1,0 +1,89 @@
+{
+  "application": "Mitel PMSEMU / PMS Tester",
+  "file_version": "2.01.0002",
+  "evidence": "emulator-observed",
+  "sanitized": true,
+  "ui_protocol_labels": ["HIS", "Hyatt Encore"],
+  "ui_transport_labels": ["Comm Port", "Telnet"],
+  "serial_defaults": {
+    "baud": 9600,
+    "data_bits": 8,
+    "parity": "N",
+    "stop_bits": 1,
+    "flow_control": "xonxoff",
+    "dtr_enabled": true,
+    "rts_enabled": false
+  },
+  "session": {
+    "initiator": "pms_tester",
+    "sequence": ["ENQ", "ACK", "STX_RECORD_ETX", "ACK"],
+    "enq_retry_seconds_observed": [5.055, 5.190, 5.051],
+    "record_contains_crlf": false,
+    "bcc": false
+  },
+  "observations": [
+    {
+      "id": "his-nam-add-one-character",
+      "mode": "HIS",
+      "operation": "add_name",
+      "room": "101",
+      "input_name": "A",
+      "payload_text": "NAM1 A                      101",
+      "wire_hex": "02 4e 41 4d 31 20 41 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 31 30 31 03"
+    },
+    {
+      "id": "his-nam-add-five-characters",
+      "mode": "HIS",
+      "operation": "add_name",
+      "room": "101",
+      "input_name": "ABCDE",
+      "payload_text": "NAM1 ABCDE                  101",
+      "wire_hex": "02 4e 41 4d 31 20 41 42 43 44 45 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 31 30 31 03"
+    },
+    {
+      "id": "his-nam-add-ten-characters",
+      "mode": "HIS",
+      "operation": "add_name",
+      "room": "101",
+      "input_name": "ABCDEFGHIJ",
+      "payload_text": "NAM1 ABCDEFGHIJ             101",
+      "wire_hex": "02 4e 41 4d 31 20 41 42 43 44 45 46 47 48 49 4a 20 20 20 20 20 20 20 20 20 20 20 20 20 31 30 31 03"
+    },
+    {
+      "id": "his-nam-add-fifteen-characters",
+      "mode": "HIS",
+      "operation": "add_name",
+      "room": "101",
+      "input_name": "ABCDEFGHIJKLMNO",
+      "payload_text": "NAM1 ABCDEFGHIJKLMNO        101",
+      "wire_hex": "02 4e 41 4d 31 20 41 42 43 44 45 46 47 48 49 4a 4b 4c 4d 4e 4f 20 20 20 20 20 20 20 20 31 30 31 03"
+    },
+    {
+      "id": "his-nam-add-twenty-character-ui-maximum",
+      "mode": "HIS",
+      "operation": "add_name",
+      "room": "101",
+      "input_name": "ABCDEFGHIJKLMNOPQRST",
+      "payload_text": "NAM1 ABCDEFGHIJKLMNOPQRST   101",
+      "wire_hex": "02 4e 41 4d 31 20 41 42 43 44 45 46 47 48 49 4a 4b 4c 4d 4e 4f 50 51 52 53 54 20 20 20 31 30 31 03"
+    },
+    {
+      "id": "hyatt-encore-nam-add",
+      "mode": "Hyatt Encore",
+      "operation": "add_name",
+      "room": "101",
+      "input_name": "TEST,GUEST",
+      "payload_text": "NAM1 TEST,GUEST             101",
+      "wire_hex": "02 4e 41 4d 31 20 54 45 53 54 2c 47 55 45 53 54 20 20 20 20 20 20 20 20 20 20 20 20 20 31 30 31 03"
+    }
+  ],
+  "limits": {
+    "name_input_maximum_observed": 20,
+    "name_area_width": 23,
+    "room_position": "final_three_characters",
+    "room_width_observed": 3,
+    "padding": "space",
+    "fixed_payload_length": 31,
+    "mitel_1_or_2_mapping": "unknown"
+  }
+}
