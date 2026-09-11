@@ -2,7 +2,7 @@
 
 ## Field-candidate release notes
 
-0.4.0 is the candidate line for the standalone InnAware PMS-PBX Emulator technician and installer support tool. It remains separate from the InnAware UCP Hospitality PMS Gateway production runtime. This candidate is intentionally not configured for automatic publication while exact-head field-product acceptance is still open.
+0.4.0 is a field-beta release of the standalone InnAware PMS-PBX Emulator technician and installer support tool. It remains separate from the InnAware UCP Hospitality PMS Gateway production runtime. It is published as a prerelease and does not replace the stable 0.3.7 line.
 
 ### Candidate scope
 
@@ -37,7 +37,7 @@ A no-runner or zero-step CI execution is infrastructure-blocked and cannot satis
 - Protocol-pack version: `2026.08.27.1`
 - Primary field platform: Windows 10/11 x64
 - Release channel: field beta
-- Automatic publication: disabled for candidate qualification
+- Publication: enabled as a GitHub prerelease; not marked latest
 
 ### Boundary with UCP Hospitality PMS Gateway
 

@@ -24,7 +24,7 @@ def test_release_manifest_matches_v040_field_candidate():
     assert manifest["protocol_pack_version"] == protocol_pack["pack_version"]
     assert manifest["repository"] == "MusicCityTelecom/innaware-pms-emulator"
     assert manifest["update_source"] == "https://github.com/MusicCityTelecom/innaware-pms-emulator/releases"
-    assert manifest["publish"] is False
+    assert manifest["publish"] is True
     assert manifest["prerelease"] is True
     assert manifest["make_latest"] is False
 
