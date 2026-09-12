@@ -67,7 +67,10 @@ def post_guest_event(options: dict, event: dict) -> dict:
         data = response.read(65537)
         if response.status != 200:
             raise RuntimeError(f"CMND HTTP {response.status}; delivery not confirmed; no automatic retry")
-        result = adapter.decode(data)
+        try:
+            result = adapter.decode(data)
+        except ValueError as exc:
+            raise RuntimeError("CMND returned an invalid response; delivery outcome unconfirmed; inspect CMND before retrying") from exc
         if not result.fields.get("success") or result.fields.get("action") != action:
             raise RuntimeError("CMND returned a SOAP fault, rejection or mismatched response; delivery not confirmed")
         return {"sent_to": 1, "cmnd_accepted": True, "tv_verified": False, "hex": payload.hex(" ")}
@@ -79,6 +82,9 @@ def post_guest_event(options: dict, event: dict) -> dict:
 
 def configured_event(options: dict, event: dict) -> dict:
     """Merge site defaults while requiring real per-stay IDs from the caller."""
+    supplied = event.get("extra")
+    if not isinstance(supplied, dict) or not isinstance(supplied.get("guest_id"), str) or not supplied["guest_id"].strip():
+        raise ValueError("CMND requires an explicit per-event extra.guest_id; defaults cannot supply a guest identity")
     defaults = options.get("htng_defaults") or {}
     rooms = options.get("room_settings") or {}
     actions = options.get("action_settings") or {}
@@ -88,5 +94,5 @@ def configured_event(options: dict, event: dict) -> dict:
     action_data = actions.get(str(event.get("action", "")).lower(), {})
     if not isinstance(room_data, dict) or not isinstance(action_data, dict):
         raise ValueError("CMND room and action settings must be objects")
-    extra = {**defaults, **room_data, **action_data, **(event.get("extra") or {})}
+    extra = {**defaults, **room_data, **action_data, **supplied}
     return {**event, "extra": extra}

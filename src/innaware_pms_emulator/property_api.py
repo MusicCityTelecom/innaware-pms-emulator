@@ -89,7 +89,7 @@ def _property_or_404(property_id: str):
         raise HTTPException(404, f"Property '{property_id}' not found")
 
 
-async def _transmit_guest(interface_name: str | None, event: GuestEvent) -> dict | None:
+async def _transmit_guest(interface_name: str | None, event: GuestEvent, *, property_id: str | None = None) -> dict | None:
     if not interface_name:
         return None
     try:
@@ -101,6 +101,8 @@ async def _transmit_guest(interface_name: str | None, event: GuestEvent) -> dict
     adapter = REGISTRY[runtime.config.protocol]
     try:
         if runtime.config.protocol == "CMND_HTNG_2011B":
+            if runtime.config.property_id and runtime.config.property_id.strip().lower() != (property_id or "").strip().lower():
+                return {"ok": False, "error": "CMND interface is bound to a different property; no remote request sent"}
             result = await manager.send_cmnd_guest(interface_name, event.model_dump())
             return {"ok": True, **result}
         payload = adapter.encode_event(event.model_dump())
@@ -188,6 +190,7 @@ async def checkin(property_id: str, request: CheckinRequest):
         request.interface_name,
         GuestEvent(action="checkin", room=request.room, first_name=request.first_name, last_name=request.last_name, language=request.language or None,
                    extra={"guest_id": guest.id}),
+        property_id=property_id,
     )
     return {"guest": guest.model_dump(mode="json"), "stay": stay.model_dump(mode="json"), "transmission": transmission}
 
@@ -200,7 +203,7 @@ async def checkout(property_id: str, request: CheckoutRequest):
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     transmission = await _transmit_guest(request.interface_name, GuestEvent(action="checkout", room=request.room,
-                                        extra={"guest_id": stay.guest_id}))
+                                        extra={"guest_id": stay.guest_id}), property_id=property_id)
     return {"stay": stay.model_dump(mode="json"), "transmission": transmission}
 
 

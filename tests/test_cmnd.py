@@ -99,15 +99,16 @@ def test_response_is_not_http_success_alone():
     assert not CmndHtngAdapter().decode(response(content="<h:Success/><h:Errors/>")).fields["success"]
 
 
-def test_http_transaction_observed_on_loopback_only():
-    with peer() as (options, received):
-        result = post_guest_event(options, event())
+@pytest.mark.parametrize("action", ["checkin", "checkout"])
+def test_http_transaction_observed_on_loopback_only(action):
+    with peer(response(action)) as (options, received):
+        result = post_guest_event(options, event(action))
         assert result["cmnd_accepted"] and not result["tv_verified"]
         assert len(received) == 1
         path, headers, wire = received[0]
         assert path == "/stay"
-        assert headers["SOAPAction"] == f'"{HTNG}/HTNG_GuestAndRoomStatusService#CheckedIn"'
-        assert wire == CmndHtngAdapter().encode_event(event())
+        assert headers["SOAPAction"] == f'"{CmndHtngAdapter.soap_action(action)}"'
+        assert wire == CmndHtngAdapter().encode_event(event(action))
 
 
 @pytest.mark.parametrize("status,body", [(302, b""), (401, b""), (500, b""),
@@ -173,7 +174,8 @@ def test_property_checkin_checkout_keep_guest_identity(monkeypatch, tmp_path):
     monkeypatch.setattr(property_api, "property_manager", manager)
     sent = []
 
-    async def transmit(name, guest_event):
+    async def transmit(name, guest_event, *, property_id=None):
+        assert property_id == "cmnd-lab"
         sent.append(guest_event)
         return {"ok": True, "cmnd_accepted": True, "tv_verified": False}
 
@@ -212,7 +214,7 @@ def test_runtime_delivers_both_actions(monkeypatch):
 
 def test_action_housekeeping_settings_are_explicit():
     options = {"htng_defaults": event()["extra"], "action_settings": {"checkout": {"housekeeping_status": "VACANT_DIRTY"}}}
-    result = configured_event(options, {"action": "checkout", "room": "00101"})
+    result = configured_event(options, {"action": "checkout", "room": "00101", "extra": {"guest_id": "synthetic-1"}})
     assert result["extra"]["housekeeping_status"] == "VACANT_DIRTY"
 
 
@@ -223,3 +225,43 @@ def test_console_exposes_separate_safe_cmnd_setup():
     assert 'id="cmnd-execute" checked' not in page
     assert 'CMND runtime and TV behavior are not yet qualified' in page
     assert '/api/v1/profiles/philips-cmnd-htng-guest-tv/instantiate' in page
+
+
+@pytest.mark.parametrize("supplied", [None, {}, [], {"guest_id": ""}, {"guest_id": 1}])
+def test_defaults_cannot_reuse_guest_identity(supplied):
+    with pytest.raises(ValueError, match="per-event"):
+        configured_event({"htng_defaults": event()["extra"]}, {"action": "checkin", "room": "00101", "extra": supplied})
+
+
+def test_wrong_property_cannot_send_to_cmnd(monkeypatch):
+    from innaware_pms_emulator import property_api
+    from innaware_pms_emulator.models import GuestEvent
+    from types import SimpleNamespace
+    config = build_interface_from_profile("philips-cmnd-htng-guest-tv", name="tv", property_id="hotel-a", enabled=False)
+    monkeypatch.setattr(property_api.manager, "get", lambda name: SimpleNamespace(config=config))
+
+    async def forbidden(*args, **kwargs):
+        pytest.fail("Cross-property request reached transport")
+    monkeypatch.setattr(property_api.manager, "send_cmnd_guest", forbidden)
+    result = asyncio.run(property_api._transmit_guest("tv", GuestEvent(**event()), property_id="hotel-b"))
+    assert not result["ok"] and "different property" in result["error"]
+
+
+def test_malformed_remote_response_is_delivery_uncertainty():
+    with peer(b"<html/>") as (options, received):
+        with pytest.raises(RuntimeError, match="outcome unconfirmed"):
+            post_guest_event(options, event())
+        assert len(received) == 1
+
+
+def test_same_property_uses_existing_case_insensitive_identity(monkeypatch):
+    from innaware_pms_emulator import property_api
+    from innaware_pms_emulator.models import GuestEvent
+    from types import SimpleNamespace
+    config = build_interface_from_profile("philips-cmnd-htng-guest-tv", name="tv", property_id="Hotel-A", enabled=False)
+    monkeypatch.setattr(property_api.manager, "get", lambda name: SimpleNamespace(config=config))
+    async def send(*args):
+        return {"cmnd_accepted": True, "tv_verified": False}
+    monkeypatch.setattr(property_api.manager, "send_cmnd_guest", send)
+    result = asyncio.run(property_api._transmit_guest("tv", GuestEvent(**event()), property_id="hotel-a"))
+    assert result["ok"]

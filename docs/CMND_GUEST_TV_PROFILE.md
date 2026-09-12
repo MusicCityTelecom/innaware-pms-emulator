@@ -19,13 +19,15 @@ Its README identifies the vendor installer as 7.5.9 and extracted build as
 
 The supplied `SmartInstall.war` has SHA-256
 `55bbdbefc9c87ce2156ac4a69403b8171845c405727d9355d717f85c2695659d`.
-Only interface schemas/WSDL were read for the implementation; no vendor
+Only interface schemas/WSDL and declarative deployment descriptors were read for the implementation; no vendor
 implementation code, binaries, schemas, credentials or private data are copied
 into this repository.
 
 | Contract | Reference inside SmartInstall.war | Observation |
 | --- | --- | --- |
 | Service | `WEB-INF/classes/HTNG/services/HTNG_GuestAndRoomStatusService.wsdl` | StayNotification port; service address is only `http://tempuri.org`, not a usable CMND endpoint |
+| Servlet route | `WEB-INF/web.xml` | CXF servlet mapped to `/services/*` |
+| Endpoint declaration | `WEB-INF/spring-security.xml` | `stayNotification` endpoint at `/StayNotification` |
 | Binding | `WEB-INF/classes/HTNG/wsdls/HTNG_CommonBindings.wsdl` | SOAP 1.1 document/literal over HTTP; CheckedIn / CheckedOut operations |
 | Check-in | `WEB-INF/classes/HTNG/messages/HTNG_HotelCheckInNotifRQ.xsd` | PropertyInfo, AffectedGuests, Room and HotelReservations required |
 | Check-out | `WEB-INF/classes/HTNG/messages/HTNG_HotelCheckOutNotifRQ.xsd` | Same required structural groups, departing guest identity |
@@ -36,6 +38,33 @@ Check-in XSD SHA-256:
 `236f1c09d580f962086cd1695c71dd04cb0af53d4e021e695f8cf41be31c607c`.
 Check-out XSD SHA-256:
 `66370f32ef7de30a0bb338bade6e2596d7c50989f2265a976d7103090d8c6625`.
+
+### Source-backed endpoint candidate
+
+The deployment descriptors resolve the candidate path to
+`/SmartInstall/services/StayNotification` **if the application context is
+`/SmartInstall`**. Context paths, server address, port and reverse-proxy prefix
+still require confirmation for the selected deployment. The WSDL placeholder
+does not override these concrete route declarations.
+
+The descriptor's `/services/**` servlet access rule is `permitAll`. This only
+describes that filter rule, not absence of application-level authentication,
+upstream authentication, activation requirements or runtime policy. No default
+credentials or production exposure are recommended or configured.
+
+Descriptor SHA-256 values:
+
+- `WEB-INF/web.xml`: `bd889075718890f56befe3ab8f8a7958446bfffb5545bd75cd68cdfb55056423`
+- `WEB-INF/spring-security.xml`: `c002a520dc9d978f5d718fe375ef8002f351a81dfd888872d7e7e963bbf1d5fd`
+
+Read-only inspection, without extraction, execution or network access:
+
+```text
+python scripts/inspect-cmnd-reference.py PATH-TO-SmartInstall.war --context-path /SmartInstall
+```
+
+The inspector emits only selected routing metadata and hashes, not arbitrary
+configuration values or credentials. Missing/ambiguous descriptors fail closed.
 
 Public corroboration: [PPDS CMND PMS FAQ](https://pms.cmnd.pro/support-page/)
 confirms an integration API exists and directs developers to PPDS for details.
@@ -60,8 +89,26 @@ Select this interface in Front Desk and use Check In / Check Out. The property
 workflow preserves the same guest ID through both operations. A local property
 change and a remote transmission are separate outcomes: inspect `transmission`.
 An unsuccessful transmission does not undo the local property operation.
+CMND interfaces bound to one property reject transmission from another property.
+An explicit per-event guest ID is mandatory; site/room defaults cannot supply
+one identity for multiple stays. A malformed remote response is reported as an
+unconfirmed delivery outcome rather than as an invalid local request.
 For multiple rooms use the profile API with explicit `allowed_rooms` and
 `room_settings` entries. Profiles do not automatically transmit every local event.
+
+### Multiple TVs in one guest room
+
+The integration targets the CMND **Room ID**, not an individual TV. Philips
+documents shared PMS information when multiple TVs have the same Room ID.
+InnAware sends one check-in/out request for that Room ID; it does not duplicate
+the request per television or assume that a room contains only one TV.
+
+An authorized test room includes **every TV assigned to its Room ID**. Verify
+welcome name/language and checkout/data clearing separately on each TV, including
+a TV that was offline or in standby during the transaction. One successful SOAP
+response does not establish all-TV delivery. If TVs use different CMND Room IDs,
+confirm the site's mapping first; no suffix expansion or multi-ID fan-out is
+implemented or inferred from the physical hotel room number.
 
 ## API configuration and preview
 
@@ -150,11 +197,16 @@ SOAPAction values are:
 response rejection, loopback HTTP/SOAPAction, no retries/redirects, opt-in guards,
 profile/runtime routing and property guest-ID continuity.
 
-Development verification on Windows: **571 tests passed, 4 skipped** (including
+Initial development verification on Windows: **571 tests passed, 4 skipped** (including
 40 CMND tests). Browser checks verified required-field errors, creation with
 writes disabled, restored interface state and retention of the existing FIAS
 default. The CMND panel was visually inspected at a narrow viewport. These are
 software/loopback checks, not vendor runtime or TV tests.
+
+Follow-up tests add cross-property protection, explicit guest identities,
+successful loopback checkout as well as check-in, malformed-response delivery
+uncertainty and read-only endpoint inspection. No vendor runtime acceptance is
+implied by these tests. Follow-up Windows regression: **590 passed, 4 skipped**.
 
 Optional reference validation (requires `lxml` in the developer environment):
 
