@@ -13,6 +13,8 @@ The Windows application is the primary field product. Linux uses the same protoc
 
 > **Status:** the project is still field beta. Supported profiles are usable for testing, but protocol maturity is reported explicitly and not every vendor-specific variant is complete or certified.
 
+Development adds an experimental [Philips / TP Vision CMND guest-TV check-in/out profile](docs/CMND_GUEST_TV_PROFILE.md), based on HTNG schemas supplied with CMND. It requires a confirmed service endpoint and site mappings; live writes are opt-in. This addition is not in the published v0.4.1 binaries and is not yet CMND-runtime or physical-TV qualified.
+
 ## Download and run on Windows
 
 ### Preferred: installer
