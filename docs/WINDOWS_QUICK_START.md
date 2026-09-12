@@ -1,7 +1,7 @@
 # InnAware PMS Emulator - Windows Quick Start
 
 **Author:** Tommy Heggie  
-**Current development version:** 0.4.1
+**Current development version:** 0.4.2
 
 ## Install
 
@@ -19,7 +19,7 @@ The installer defaults to a per-user installation under:
 
 ### Portable distribution
 
-1. Download `InnAware-PMS-Emulator-Windows-0.4.1.zip` from the current release.
+1. Download `InnAware-PMS-Emulator-Windows-0.4.2.zip` from the current release.
 2. Extract it to a writable folder.
 3. Run `InnAware-PMS-Emulator.exe`.
 
@@ -87,11 +87,11 @@ Open **Updates** from the main operator window. The Update Center can check for 
 
 Application and protocol-pack downloads are SHA-256 verified before use. Application installation remains an explicit user action.
 
-For 0.4.1, a successful update check should report:
+With prerelease updates enabled, a successful update check for 0.4.2 should report:
 
 ```text
-Installed: 0.4.1
-Latest:   v0.4.1
+Installed: 0.4.2
+Latest:   v0.4.2
 Status:   Current
 ```
 

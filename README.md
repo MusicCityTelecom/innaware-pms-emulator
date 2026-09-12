@@ -1,9 +1,9 @@
 # InnAware PMS Emulator
 
 **Author:** Tommy Heggie  
-**Current development version:** 0.4.1
+**Current development version:** 0.4.2
 
-**Latest field beta:** v0.4.1
+**Latest field beta:** v0.4.2
 **Primary user platform:** Windows 10/11 x64  
 **Engineering/lab platform:** Linux / Debian
 
@@ -13,7 +13,7 @@ The Windows application is the primary field product. Linux uses the same protoc
 
 > **Status:** the project is still field beta. Supported profiles are usable for testing, but protocol maturity is reported explicitly and not every vendor-specific variant is complete or certified.
 
-Development adds an experimental [Philips / TP Vision CMND guest-TV check-in/out profile](docs/CMND_GUEST_TV_PROFILE.md), based on HTNG schemas supplied with CMND. It requires a confirmed service endpoint and site mappings; live writes are opt-in. This addition is not in the published v0.4.1 binaries and is not yet CMND-runtime or physical-TV qualified.
+Version 0.4.2 adds an experimental [Philips / TP Vision CMND guest-TV check-in/out profile](docs/CMND_GUEST_TV_PROFILE.md), based on HTNG schemas supplied with CMND. It requires a confirmed service endpoint and site mappings; live writes are opt-in. It is not yet CMND-runtime or physical-TV qualified. Multiple TVs sharing one CMND Room ID receive a room-level notification; verify the result on every TV. See the [0.4.2 release notes](docs/RELEASE_NOTES_0.4.2.md).
 
 ## Download and run on Windows
 
@@ -277,7 +277,7 @@ powershell -ExecutionPolicy Bypass `
 
 The builder runs the full Python test suite, creates the one-file/windowed EXE, embeds the canonical protocol-pack manifest, launches the actual frozen EXE for a runtime smoke test, builds the installer when Inno Setup is available, and generates release ZIP/checksum artifacts.
 
-Expected 0.4.1 application outputs:
+Expected 0.4.2 application outputs:
 
 ```text
 dist-windows\InnAware-PMS-Emulator.exe
@@ -285,9 +285,9 @@ dist-windows\InnAware-PMS-Emulator-Setup.exe
 dist-windows\README-WINDOWS.txt
 dist-windows\SHA256SUMS.txt
 
-InnAware-PMS-Emulator-Windows-0.4.1.zip
-InnAware-PMS-Emulator-Source-0.4.1.zip
-SHA256SUMS-WINDOWS-0.4.1.txt
+InnAware-PMS-Emulator-Windows-0.4.2.zip
+InnAware-PMS-Emulator-Source-0.4.2.zip
+SHA256SUMS-WINDOWS-0.4.2.txt
 ```
 
 Build the independent protocol pack with:
@@ -355,7 +355,7 @@ The protocol engine is deliberately shared. A future WinUI/WinForms shell may im
 
 `v0.3.0-beta` passed the Linux/server laboratory regression gate and the actual Windows frozen-EXE/installer build gate.
 
-The 0.4.1 line is the current field-beta release and includes corrected update-version state handling plus synchronized package, installer, release-tag, and release-manifest metadata.
+The 0.4.2 line is the current field-beta release and adds the experimental CMND HTNG guest-TV profile while retaining corrected update-version state handling and synchronized package, installer, release-tag, and release-manifest metadata.
 
 ## Safety
 

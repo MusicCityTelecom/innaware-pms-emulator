@@ -1,8 +1,8 @@
 # Philips / TP Vision CMND guest-TV profile
 
 Status: **experimental, schema-backed; not CMND-runtime or physical-TV qualified**.
-This feature is on `codex/cmnd-guest-tv-profile`, based on Emulator main
-`810c553a1cd4ca024460ccde38846614480fb418`. It is not in the published v0.4.1 binaries.
+Introduced in the v0.4.2 field beta. Development was based on Emulator main
+`810c553a1cd4ca024460ccde38846614480fb418` (v0.4.1).
 
 The profile is `philips-cmnd-htng-guest-tv`; its protocol is `CMND_HTNG_2011B`.
 It sends HTNG 2011B StayNotification SOAP requests to an explicitly configured

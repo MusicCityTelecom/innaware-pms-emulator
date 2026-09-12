@@ -219,6 +219,18 @@ QUICK START
 5. Choose TCP Server, TCP Client, or an available Windows COM port.
 6. Start testing and use Live Wire Capture to inspect traffic.
 
+CMND GUEST TV (EXPERIMENTAL)
+===========================
+Use the dedicated Philips / TP Vision CMND panel for HTNG check-in/checkout.
+Supply a confirmed endpoint, hotel/guest identity types, room ID, extension and
+check-in/out housekeeping values. Writes stay disabled until explicitly enabled
+for an exact room allowlist. Do not use invented site values in a live system.
+Multiple TVs sharing a CMND Room ID use one room-level notification; verify every
+TV. Different Room IDs need explicit mapping, not guessed suffixes. SOAP success
+does not verify TV delivery. No live CMND or TV qualification is claimed.
+Full setup and evidence guide:
+https://github.com/MusicCityTelecom/innaware-pms-emulator/blob/v$Version/docs/CMND_GUEST_TV_PROFILE.md
+
 DATA
 ====
 Windows 10/11 x64 is required. Python and the application libraries are bundled.

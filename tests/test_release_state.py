@@ -16,7 +16,7 @@ def test_release_manifest_matches_v040_field_candidate():
     protocol_pack = json.loads((ROOT / "protocol-pack.json").read_text(encoding="utf-8"))
 
     app_version = project["project"]["version"]
-    assert app_version == "0.4.1"
+    assert app_version == "0.4.2"
     assert manifest["schema_version"] == 1
     assert manifest["application_version"] == app_version
     assert manifest["release_tag"] == f"v{app_version}"
