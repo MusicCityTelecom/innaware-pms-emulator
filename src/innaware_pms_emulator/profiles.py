@@ -22,6 +22,27 @@ class InterfaceProfile(BaseModel):
 
 
 BUILTIN_PROFILES: dict[str, InterfaceProfile] = {
+    "philips-cmnd-htng-guest-tv": InterfaceProfile(
+        id="philips-cmnd-htng-guest-tv",
+        name="Philips / TP Vision CMND - Guest TV Check-In/Out (experimental)",
+        purpose="pms",
+        protocol="CMND_HTNG_2011B",
+        maturity="experimental-schema-backed",
+        description="HTNG 2011B StayNotification SOAP client based on schemas included with CMND. Requires a confirmed endpoint and site mappings; physical-TV behavior is unqualified.",
+        defaults={
+            "transport": "http_client", "emulation_role": "pms",
+            "options": {"framing": "raw", "execute": False, "endpoint_url": None,
+                        "allowed_rooms": [], "timeout_seconds": 10,
+                        "htng_defaults": {}, "room_settings": {}},
+        },
+        notes=[
+            "Instantiate disabled until endpoint_url is confirmed; the supplied WSDL contains only a placeholder URL.",
+            "Set hotel_code and guest_id_type in htng_defaults; per-room telephone_extension and housekeeping_status in room_settings.",
+            "Use the same guest_id at check-in and checkout. Configure allowed_rooms and explicitly opt in with execute=true.",
+            "CMND acceptance is not proof of TV delivery or guest-data erasure; verify on an authorized test TV.",
+            "No FIAS alias, direct WIXP command, serial settings, TV discovery or implicit retry is provided.",
+        ],
+    ),
     "fias-pms-tcp-server": InterfaceProfile(
         id="fias-pms-tcp-server",
         name="Generic CRLF FIAS (No ENQ/ACK) - TCP Server",

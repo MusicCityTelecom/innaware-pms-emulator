@@ -21,6 +21,7 @@ class TransportMode(str, Enum):
     TCP_CLIENT = "tcp_client"
     SERIAL = "serial"
     HTTP_SERVER = "http_server"
+    HTTP_CLIENT = "http_client"
 
 
 class InterfaceConfig(BaseModel):

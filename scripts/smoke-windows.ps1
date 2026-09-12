@@ -96,8 +96,27 @@ try {
 
     $profiles = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v1/profiles" -TimeoutSec 3
     $profileIds = @($profiles.profiles | ForEach-Object { $_.id })
-    foreach ($required in @("fias-pms-tcp-server", "hilton-pep-fias-tcp-server", "innform-xl-tcp-server", "hobis-a-tcp-server")) {
+    foreach ($required in @("fias-pms-tcp-server", "hilton-pep-fias-tcp-server", "innform-xl-tcp-server", "hobis-a-tcp-server", "philips-cmnd-htng-guest-tv")) {
         if ($profileIds -notcontains $required) { throw "Required technician profile missing from frozen build: $required" }
+    }
+
+    # Encode locally only: never configure or contact a CMND/TV endpoint in smoke tests.
+    foreach ($Action in @('checkin', 'checkout')) {
+        $Guest = @{
+            action = $Action; room = '00101'; first_name = 'SYNTHETIC'; last_name = 'SMOKE'
+            extra = @{
+                hotel_code = 'LAB'; guest_id = 'synthetic-smoke-1'; guest_id_type = '1'
+                telephone_extension = '0101'; housekeeping_status = 'VACANT_CLEAN'
+            }
+        } | ConvertTo-Json -Depth 4
+        $Encoded = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$Port/api/v1/protocols/CMND_HTNG_2011B/guest-event" -ContentType 'application/json' -Body $Guest -TimeoutSec 5
+        $Xml = [xml]$Encoded.text
+        $ExpectedRecord = if ($Action -eq 'checkin') { 'HTNG_HotelCheckInNotifRQ' } else { 'HTNG_HotelCheckOutNotifRQ' }
+        $Request = $Xml.DocumentElement.FirstChild.FirstChild
+        if ($Request.LocalName -ne $ExpectedRecord -or $Request.NamespaceURI -ne 'http://htng.org/2011B') { throw 'Packaged CMND request shape mismatch.' }
+        $Room = $Request.SelectSingleNode("*[local-name()='Room']")
+        if ($Room.GetAttribute('RoomID') -cne '00101' -or -not $Encoded.hex) { throw 'Packaged CMND room identity or bytes missing.' }
+        if ($Action -eq 'checkout' -and $Encoded.text.Contains('SYNTHETIC')) { throw 'Packaged CMND checkout leaked guest name.' }
     }
 
     $property = Invoke-RestMethod `

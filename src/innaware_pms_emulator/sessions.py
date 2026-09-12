@@ -17,6 +17,7 @@ from .property_state import property_manager
 from .state import CallAccountingStateMachine, EngineAction, FiasStateMachine
 from .transactions import CallAccountingTransactionSender, MitelTransactionSender
 from .tcp_listener import OwnedTcpListener
+from .cmnd_transport import configured_event, post_guest_event, validate_options
 
 
 _TRANSACTIONAL_CA_PROTOCOLS = {"INNFORM_XL", "HOBIS", "HOBIS_A", "HOLIDEX"}
@@ -125,6 +126,11 @@ class InterfaceManager:
 
     async def create(self, config: InterfaceConfig) -> InterfaceRuntime:
         key = config.name.strip().lower()
+        if config.protocol.upper() == "CMND_HTNG_2011B":
+            if config.transport is not TransportMode.HTTP_CLIENT:
+                raise ValueError("CMND HTNG requires HTTP client transport")
+            if config.enabled:
+                validate_options(config.options)
         async with self._lock:
             if key in self._interfaces:
                 raise ValueError(f"Interface '{config.name}' already exists")
@@ -179,6 +185,8 @@ class InterfaceManager:
         runtime.engine = self._build_engine(runtime.config)
         runtime.transport_session_status = None
         transport = runtime.config.transport
+        if runtime.config.protocol.upper() == "CMND_HTNG_2011B" and transport is not TransportMode.HTTP_CLIENT:
+            raise ValueError("CMND HTNG requires HTTP client transport")
         if transport is TransportMode.TCP_SERVER:
             await self._start_tcp_server(runtime)
         elif transport is TransportMode.TCP_CLIENT:
@@ -186,6 +194,11 @@ class InterfaceManager:
         elif transport is TransportMode.SERIAL:
             runtime.task = asyncio.create_task(self._serial_loop(runtime), name=f"pms-serial:{name}")
         elif transport is TransportMode.HTTP_SERVER:
+            runtime.state = "ready"
+        elif transport is TransportMode.HTTP_CLIENT:
+            if runtime.config.protocol.upper() != "CMND_HTNG_2011B":
+                raise ValueError("HTTP client transport is currently CMND-only")
+            validate_options(runtime.config.options)
             runtime.state = "ready"
         else:
             raise ValueError(f"Unsupported transport: {transport}")
@@ -228,9 +241,30 @@ class InterfaceManager:
 
     async def send(self, name: str, payload: bytes, *, frame: bool = True, note: str | None = None) -> int:
         runtime = self.get(name)
+        if runtime.config.protocol.upper() == "CMND_HTNG_2011B":
+            raise RuntimeError("CMND requires the typed guest-event endpoint; raw/control sends are disabled")
         framing = runtime.config.options.get("framing", "raw")
         wire = encode_frame(payload, FramingMode(framing)) if frame else payload
         return await self._write(runtime, wire, note=note)
+
+    async def send_cmnd_guest(self, name: str, event: dict) -> dict:
+        runtime = self.get(name)
+        if runtime.config.protocol.upper() != "CMND_HTNG_2011B" or runtime.config.transport is not TransportMode.HTTP_CLIENT:
+            raise ValueError("Not a CMND HTTP interface")
+        async with runtime.transaction_lock:
+            if runtime.state != "ready" or runtime.stopping:
+                raise RuntimeError("CMND interface must be started before sending")
+            prepared = configured_event(runtime.config.options, event)
+            task = asyncio.create_task(asyncio.to_thread(post_guest_event, runtime.config.options, prepared))
+            try:
+                result = await asyncio.shield(task)
+            except asyncio.CancelledError:
+                # Retain the transaction lock until the in-flight HTTP worker
+                # finishes: cancelling the caller does not cancel a remote write.
+                await asyncio.gather(task, return_exceptions=True)
+                raise
+            runtime.capture("out", bytes.fromhex(result["hex"]), note="CMND accepted; TV outcome unverified")
+            return result
 
     async def send_control(self, name: str, control: str) -> int:
         mapping = {"ENQ": ENQ, "ACK": ACK, "NAK": NAK}

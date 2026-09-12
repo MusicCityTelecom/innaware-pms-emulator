@@ -420,6 +420,8 @@ async def send_guest_event(name: str, event: GuestEvent):
         raise HTTPException(400, "Interface is not a PMS interface")
     adapter = REGISTRY[runtime.config.protocol]
     try:
+        if runtime.config.protocol == "CMND_HTNG_2011B":
+            return await manager.send_cmnd_guest(name, event.model_dump())
         payload = adapter.encode_event(event.model_dump())
         if runtime.config.options.get("transactional_enq_ack"):
             transaction = await manager.send_pms_transaction(name, payload)

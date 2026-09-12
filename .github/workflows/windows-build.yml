@@ -44,6 +44,14 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Run source regressions before packaging or publishing
+        shell: pwsh
+        run: |
+          python -m pip install -e . pytest
+          if ($LASTEXITCODE -ne 0) { throw "Test dependency installation failed" }
+          python -m pytest -q
+          if ($LASTEXITCODE -ne 0) { throw "Source regressions failed; release blocked" }
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress -y

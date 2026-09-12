@@ -6,6 +6,7 @@ from .call_accounting import (
     InnFormXLAdapter,
 )
 from .fias import FiasAdapter, HiltonPepFiasAdapter
+from .cmnd import CmndHtngAdapter
 from .legacy import ChoiceAdvantageAdapter, OnQAdapter, OperaIpAdapter, OperaLegacyAdapter
 from .mitel import Mitel1Adapter, Mitel2Adapter
 
@@ -14,6 +15,7 @@ def build_registry():
     mitel_1 = Mitel1Adapter()
     mitel_2 = Mitel2Adapter()
     return {
+        "CMND_HTNG_2011B": CmndHtngAdapter(),
         "FIAS": FiasAdapter(),
         "HILTON_PEP_FIAS": HiltonPepFiasAdapter(),
         "OPERAIP_FIAS": OperaIpAdapter(),
@@ -65,6 +67,12 @@ _MITEL_RECOMMENDED = {
 
 
 PROTOCOL_METADATA = {
+    "CMND_HTNG_2011B": {
+        "maturity": "experimental-schema-backed",
+        "console_setup": "cmnd",
+        "description": "Philips / TP Vision CMND guest-TV check-in/out via HTNG 2011B SOAP. Schema-backed only; not CMND runtime or TV certified. Use the dedicated CMND setup panel or profile API; live writes require explicit opt-in.",
+        "recommended": {"transport": "http_client", "framing": "raw", "execute": False},
+    },
     "FIAS": {
         "maturity": "stateful",
         "description": "Generic line-oriented CRLF FIAS without ENQ/ACK; requires a PBX interface configured for matching FIAS transport.",
