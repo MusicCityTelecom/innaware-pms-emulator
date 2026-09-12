@@ -102,7 +102,7 @@ def _health(host: str, port: int) -> dict[str, Any] | None:
             if response.status != 200:
                 return None
             payload = json.loads(response.read().decode("utf-8"))
-            if payload.get("status") == "ok" and "version" in payload:
+            if isinstance(payload, dict) and payload.get("status") == "ok" and "version" in payload:
                 return payload
     except (OSError, urllib.error.URLError, json.JSONDecodeError):
         return None
@@ -301,7 +301,7 @@ def main() -> None:
     if existing:
         try:
             _run_native_window(url, None)
-        except RuntimeError:
+        except Exception:
             webbrowser.open(url)
         return
 
@@ -319,7 +319,17 @@ def main() -> None:
                 f"Diagnostic log:\n{_log_path()}"
             )
             return
-        _run_native_window(url, child, log_handle)
+        try:
+            _run_native_window(url, child, log_handle)
+        except Exception as exc:
+            # Native hosting is optional. The same bundled service and console
+            # remain usable in a browser when WebView2/.NET is unavailable.
+            _stop_child(child, log_handle)
+            child = None
+            log_handle = None
+            with _log_path().open("a", encoding="utf-8") as fallback_log:
+                fallback_log.write(f"Desktop host unavailable; opening browser: {exc}\n")
+            _run_browser_foreground(args.host, args.port, args.log_level)
         child = None
         log_handle = None
     except Exception as exc:

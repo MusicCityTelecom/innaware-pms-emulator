@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "application_version": "0.4.0",
-  "release_tag": "v0.4.0",
+  "application_version": "0.4.1",
+  "release_tag": "v0.4.1",
   "release_channel": "field-beta",
   "publish": true,
   "prerelease": true,

@@ -79,6 +79,13 @@ try {
 
     $info = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v1/app-info" -TimeoutSec 3
     if ($info.product -ne "InnAware PMS Emulator") { throw "Unexpected app-info product value." }
+    $ExpectedSha = (git rev-parse HEAD).Trim()
+    $ExpectedVersion = (Get-Content (Join-Path (Split-Path -Parent $PSScriptRoot) 'release-manifest.json') -Raw | ConvertFrom-Json).application_version
+    if ($info.source_sha -ne $ExpectedSha -or $info.version -ne $ExpectedVersion) { throw "Packaged application identity does not match this source commit/version." }
+    foreach ($Page in @('/', '/updates', '/docs')) {
+        $Response = Invoke-WebRequest -Uri "http://127.0.0.1:$Port$Page" -TimeoutSec 5 -UseBasicParsing
+        if ($Response.StatusCode -ne 200 -or $Response.Content.Length -lt 100) { throw "Packaged UI missing: $Page" }
+    }
     if (-not $info.protocol_pack_version -or $info.protocol_pack_version -eq "unknown") { throw "Frozen build could not resolve its bundled protocol-pack version." }
 
     $telemetry = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v1/telemetry/status" -TimeoutSec 3

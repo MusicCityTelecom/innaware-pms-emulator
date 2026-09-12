@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import os
 import platform
+import sys
+from pathlib import Path
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -125,9 +128,16 @@ def health():
 
 @app.get("/api/v1/app-info")
 def app_info():
+    build_info = {}
+    if getattr(sys, "frozen", False):
+        try:
+            build_info = json.loads((Path(sys._MEIPASS) / "build-info.json").read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            pass
     return {
         "product": "InnAware PMS Emulator",
         "version": __version__,
+        "source_sha": build_info.get("source_sha"),
         "protocol_pack_version": current_protocol_pack_version(),
         "platform": platform.system(),
         "platform_release": platform.release(),

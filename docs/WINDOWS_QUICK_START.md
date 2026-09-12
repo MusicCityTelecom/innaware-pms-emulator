@@ -1,7 +1,7 @@
 # InnAware PMS Emulator - Windows Quick Start
 
 **Author:** Tommy Heggie  
-**Current development version:** 0.3.7
+**Current development version:** 0.4.1
 
 ## Install
 
@@ -19,7 +19,7 @@ The installer defaults to a per-user installation under:
 
 ### Portable distribution
 
-1. Download `InnAware-PMS-Emulator-Windows-0.3.7.zip` from the current release.
+1. Download `InnAware-PMS-Emulator-Windows-0.4.1.zip` from the current release.
 2. Extract it to a writable folder.
 3. Run `InnAware-PMS-Emulator.exe`.
 
@@ -28,6 +28,8 @@ Python is not required to run either packaged distribution. Installer and portab
 ## First launch
 
 The application starts its local engine automatically and opens the operator console in a native Windows window.
+
+The native window uses Microsoft Edge WebView2 and .NET Framework 4.8. If native hosting fails, the application opens the same console in your default browser. You can also select **InnAware PMS Emulator (Browser)** from the Start Menu or run the EXE with `--browser`. A current Edge, Chrome, or Firefox browser works with the local console. Python is bundled. Local simulation works offline; updates need Internet access. Serial adapters require their manufacturer's driver and a selected COM port.
 
 Persistent data and logs are stored under:
 
@@ -85,11 +87,11 @@ Open **Updates** from the main operator window. The Update Center can check for 
 
 Application and protocol-pack downloads are SHA-256 verified before use. Application installation remains an explicit user action.
 
-For 0.3.7, a successful update check should report:
+For 0.4.1, a successful update check should report:
 
 ```text
-Installed: 0.3.7
-Latest:   v0.3.7
+Installed: 0.4.1
+Latest:   v0.4.1
 Status:   Current
 ```
 
