@@ -90,7 +90,9 @@ class UpdateManager:
         if not self.settings_path.exists():
             return settings
         try:
-            raw = json.loads(self.settings_path.read_text(encoding="utf-8"))
+            # Windows PowerShell 5.1 UTF8 output includes a BOM. Honor persisted
+            # opt-outs rather than falling back to enabled defaults for that file.
+            raw = json.loads(self.settings_path.read_text(encoding="utf-8-sig"))
         except (OSError, json.JSONDecodeError):
             return settings
         if isinstance(raw, dict):

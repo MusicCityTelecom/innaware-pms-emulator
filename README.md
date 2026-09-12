@@ -1,8 +1,9 @@
 # InnAware PMS Emulator
 
 **Author:** Tommy Heggie  
-**Current development version:** 0.3.7  
-**Latest published field beta:** v0.3.7  
+**Current development version:** 0.4.1
+
+**Latest field beta:** v0.4.1
 **Primary user platform:** Windows 10/11 x64  
 **Engineering/lab platform:** Linux / Debian
 
@@ -45,6 +46,10 @@ InnAware-PMS-Emulator.exe
 ```
 
 **Python is not required to run either packaged Windows distribution.**
+
+Native desktop hosting uses Microsoft Edge WebView2 and .NET Framework 4.8. If native hosting is unavailable, the application opens the same local console in your default browser. The installer also adds a **Browser** shortcut. Local simulation works offline. USB serial adapters require their manufacturer's Windows driver; virtual COM drivers are not bundled. See the bundled `README-WINDOWS.txt` for prerequisites and troubleshooting.
+
+Each release includes `build-info.json` and `release-assets-<version>.json`, recording the source commit, dependency inventory, and SHA-256 of every downloadable asset. The `/api/v1/app-info` endpoint exposes the running executable's source commit.
 
 Persistent data and logs are stored under:
 
@@ -270,7 +275,7 @@ powershell -ExecutionPolicy Bypass `
 
 The builder runs the full Python test suite, creates the one-file/windowed EXE, embeds the canonical protocol-pack manifest, launches the actual frozen EXE for a runtime smoke test, builds the installer when Inno Setup is available, and generates release ZIP/checksum artifacts.
 
-Expected 0.3.7 application outputs:
+Expected 0.4.1 application outputs:
 
 ```text
 dist-windows\InnAware-PMS-Emulator.exe
@@ -278,9 +283,9 @@ dist-windows\InnAware-PMS-Emulator-Setup.exe
 dist-windows\README-WINDOWS.txt
 dist-windows\SHA256SUMS.txt
 
-InnAware-PMS-Emulator-Windows-0.3.7.zip
-InnAware-PMS-Emulator-Source-0.3.7.zip
-SHA256SUMS-WINDOWS-0.3.7.txt
+InnAware-PMS-Emulator-Windows-0.4.1.zip
+InnAware-PMS-Emulator-Source-0.4.1.zip
+SHA256SUMS-WINDOWS-0.4.1.txt
 ```
 
 Build the independent protocol pack with:
@@ -348,7 +353,7 @@ The protocol engine is deliberately shared. A future WinUI/WinForms shell may im
 
 `v0.3.0-beta` passed the Linux/server laboratory regression gate and the actual Windows frozen-EXE/installer build gate.
 
-The 0.3.7 line is the current field-beta release and includes corrected update-version state handling plus synchronized package, installer, release-tag, and release-manifest metadata.
+The 0.4.1 line is the current field-beta release and includes corrected update-version state handling plus synchronized package, installer, release-tag, and release-manifest metadata.
 
 ## Safety
 

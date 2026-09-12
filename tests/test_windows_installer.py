@@ -6,14 +6,13 @@ BUILD_SCRIPT = Path("scripts/build-windows.ps1")
 SMOKE_SCRIPT = Path("scripts/smoke-windows.ps1")
 
 
-def test_installer_closes_pyinstaller_process_tree_before_upgrade():
+def test_installer_uses_scoped_restart_manager_and_preserves_user_files():
     script = INSTALLER.read_text(encoding="utf-8")
     assert "CloseApplications=force" in script
     assert "CloseApplicationsFilter={#AppExeName}" in script
     assert "RestartApplications=no" in script
-    assert "function PrepareToInstall" in script
-    assert "taskkill.exe" in script
-    assert "'/F /T /IM \"{#AppExeName}\"'" in script
+    assert "taskkill.exe" not in script
+    assert 'Type: filesandordirs; Name: "{app}"' not in script
 
 
 def test_installer_and_build_ship_privacy_and_support_metadata():

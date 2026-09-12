@@ -48,9 +48,11 @@ Source: "{#SourceDir}\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\README-WINDOWS.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\PRIVACY-TELEMETRY.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\SHA256SUMS.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\build-info.json"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\InnAware PMS Emulator"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
+Name: "{autoprograms}\InnAware PMS Emulator (Browser)"; Filename: "{app}\{#AppExeName}"; Parameters: "--browser"; WorkingDir: "{app}"
 Name: "{autodesktop}\InnAware PMS Emulator"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Tasks]
@@ -59,29 +61,7 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Launch InnAware PMS Emulator"; Flags: nowait postinstall skipifsilent
 
-[UninstallDelete]
-Type: filesandordirs; Name: "{app}"
-
 [Code]
-function PrepareToInstall(var NeedsRestart: Boolean): String;
-var
-  ResultCode: Integer;
-begin
-  { PyInstaller one-file mode may leave a launcher and child process using the
-    installed EXE. Restart Manager does not consistently close that process
-    tree, so terminate only this product image before replacing the file. }
-  Exec(
-    ExpandConstant('{sys}\taskkill.exe'),
-    '/F /T /IM "{#AppExeName}"',
-    '',
-    SW_HIDE,
-    ewWaitUntilTerminated,
-    ResultCode
-  );
-  Sleep(500);
-  Result := '';
-end;
-
 function InitializeUninstall(): Boolean;
 begin
   Result := True;

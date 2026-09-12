@@ -20,6 +20,20 @@ else {
     [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
 }
 $PreviousExe = Join-Path $OutputPath "InnAware-PMS-Emulator.exe"
+$RepoFullPath = [System.IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/')
+if (-not $OutputPath.StartsWith($RepoFullPath + [System.IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Build output must be a dedicated directory inside the repository: $OutputPath"
+}
+if ((Split-Path -Leaf $OutputPath) -notlike 'dist-windows*') {
+    throw "Build output directory must be named dist-windows or dist-windows-<suffix>."
+}
+if (Test-Path -LiteralPath $OutputPath) {
+    $OutputItem = Get-Item -LiteralPath $OutputPath
+    if ($OutputItem.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Build output cannot be a link or junction." }
+}
+$TrackedChanges = git status --porcelain --untracked-files=no
+if ($LASTEXITCODE -ne 0 -or $TrackedChanges) { throw "Commit tracked changes before building: binaries and source archive must describe the same commit." }
+$SourceSha = (git rev-parse HEAD).Trim()
 $TaskKill = Join-Path $env:SystemRoot "System32\taskkill.exe"
 
 function Get-OutputExeProcesses {
@@ -152,6 +166,14 @@ VSVersionInfo(
 
 $ProtocolPackManifest = Join-Path $RepoRoot "protocol-pack.json"
 if (-not (Test-Path $ProtocolPackManifest)) { throw "Canonical protocol-pack.json is missing" }
+$BuildInfo = Join-Path $OutputPath "build-info.json"
+[ordered]@{
+    schema_version = 1
+    application_version = $Version
+    source_sha = $SourceSha
+    python_version = (& $Py --version)
+    dependencies = @(& $Py -m pip list --format=json | ConvertFrom-Json)
+} | ConvertTo-Json -Depth 5 | Set-Content -Path $BuildInfo -Encoding utf8
 
 & $Py -m PyInstaller `
     --noconfirm `
@@ -162,6 +184,7 @@ if (-not (Test-Path $ProtocolPackManifest)) { throw "Canonical protocol-pack.jso
     --version-file $VersionFile `
     --copy-metadata innaware-pms-emulator `
     --add-data "$ProtocolPackManifest;." `
+    --add-data "$BuildInfo;." `
     --collect-all innaware_pms_emulator `
     --collect-all uvicorn `
     --collect-all fastapi `
@@ -190,7 +213,7 @@ Author: Tommy Heggie
 QUICK START
 ===========
 1. Run InnAware-PMS-Emulator.exe.
-2. The local engine starts automatically and opens in a native Windows application window.
+2. The local engine starts automatically and opens in a native Windows application window, or your browser if the desktop runtime is unavailable.
 3. Create or seed a property.
 4. Configure a PMS interface and, independently, a call-accounting interface.
 5. Choose TCP Server, TCP Client, or an available Windows COM port.
@@ -198,6 +221,14 @@ QUICK START
 
 DATA
 ====
+Windows 10/11 x64 is required. Python and the application libraries are bundled.
+The native window uses Microsoft Edge WebView2 and .NET Framework 4.8. If either
+is unavailable, use the automatic browser fallback or the Browser Start Menu shortcut.
+A current Edge, Chrome, or Firefox browser can use the console without WebView2.
+No Internet connection is required for local simulation. Updates require Internet access.
+USB serial adapters require their manufacturer's Windows driver; select the resulting
+COM port in the application. Virtual COM drivers are not included.
+
 Persistent state and logs are stored under:
   %LOCALAPPDATA%\InnAware\PMS Emulator
 
@@ -263,7 +294,7 @@ if (-not $SkipInstaller) {
         Set-Content -Path (Join-Path $OutputPath "SHA256SUMS.txt") -Value $HashLines -Encoding ascii
     }
     else {
-        Write-Warning "Inno Setup 6 was not found. Portable EXE/ZIP will be built; install Inno Setup 6 to also produce Setup.exe. Checked PATH, Program Files, Program Files (x86), and LOCALAPPDATA\Programs."
+        throw "Inno Setup 6 is required for a complete release. Install it or explicitly request -SkipInstaller for a portable-only development build."
     }
 }
 
@@ -273,8 +304,11 @@ $PortableFiles = @(
     $Exe,
     (Join-Path $OutputPath "README-WINDOWS.txt"),
     $PrivacyOutput,
+    $BuildInfo,
     (Join-Path $OutputPath "SHA256SUMS.txt")
 )
+# Keep the package checksum file self-contained: Setup.exe is a separate asset.
+Set-Content -Path (Join-Path $OutputPath "SHA256SUMS.txt") -Value "$($ExeHash.Hash.ToLower())  InnAware-PMS-Emulator.exe" -Encoding ascii
 Compress-Archive -Path $PortableFiles -DestinationPath $Zip
 
 $SourceZip = Join-Path $RepoRoot "InnAware-PMS-Emulator-Source-$Version.zip"
@@ -292,6 +326,7 @@ $ReleaseSums = @(
 if ($InstallerHash) { $ReleaseSums += "$($InstallerHash.Hash.ToLower())  InnAware-PMS-Emulator-Setup.exe" }
 $ReleaseChecksumFile = Join-Path $RepoRoot "SHA256SUMS-WINDOWS-$Version.txt"
 Set-Content -Path $ReleaseChecksumFile -Value $ReleaseSums -Encoding ascii
+
 
 Write-Host ""
 Write-Host "Build complete:" -ForegroundColor Green
