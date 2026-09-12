@@ -1,6 +1,7 @@
 import io
 import json
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -35,3 +36,15 @@ def test_missing_native_runtime_starts_browser_service_after_child_cleanup(monke
     assert events[0] == ("stop", child)
     assert events[1][0] == "browser"
     assert "WebView2 unavailable" in launcher._log_path().read_text()
+
+
+def test_legacy_ie_renderer_triggers_cleanup_and_browser_recovery(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setitem(sys.modules, "webview", SimpleNamespace())
+    monkeypatch.setitem(sys.modules, "webview.platforms", SimpleNamespace(winforms=SimpleNamespace(renderer="mshtml")))
+    stopped = []
+    monkeypatch.setattr(launcher, "_stop_child", lambda child, *a: stopped.append(child))
+    child = object()
+    with pytest.raises(RuntimeError, match="WebView2"):
+        launcher._run_native_window("http://127.0.0.1:8080", child)
+    assert stopped == [child]

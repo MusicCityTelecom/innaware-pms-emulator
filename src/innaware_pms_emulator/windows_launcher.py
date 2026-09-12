@@ -225,6 +225,11 @@ def _run_native_window(url: str, child: subprocess.Popen | None, log_handle: Any
         raise RuntimeError(f"The Windows desktop component could not be loaded: {exc}") from exc
 
     try:
+        if sys.platform == "win32":
+            from webview.platforms import winforms
+
+            if winforms.renderer != "edgechromium":
+                raise RuntimeError("Microsoft Edge WebView2 is unavailable; the console requires a modern browser.")
         webview.create_window(
             APP_TITLE,
             url=url,
@@ -234,7 +239,7 @@ def _run_native_window(url: str, child: subprocess.Popen | None, log_handle: Any
             resizable=True,
             text_select=True,
         )
-        webview.start(debug=False)
+        webview.start(gui="edgechromium" if sys.platform == "win32" else None, debug=False)
     finally:
         _stop_child(child, log_handle)
 
